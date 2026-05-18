@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Resumen</h2>
+<p>Total analizados: {{ summary.total }}</p>
+<p>Links OK: {{ summary.ok }}</p>
+<p>Links rotos: {{ summary.broken }}</p>
+<p>Duplicados: {{ summary.duplicates }}</p>
+<p>Para revisar/borrar: {{ summary.review_or_delete }}</p>
+{% if summary.warning %}<p><strong>Advertencia:</strong> {{ summary.warning }}</p>{% endif %}
+<h3>Top 10 recomendados</h3><ul>
+{% for b in summary.top_recommended %}<li>{{ b.title }} - {{ b.score }} - {{ b.recommended_action }}</li>{% endfor %}
+</ul>
+<h3>Reportes</h3><ul>{% for r in summary.reports %}<li><a href="/reports/{{ r }}">{{ r }}</a></li>{% endfor %}</ul>
+{% endblock %}

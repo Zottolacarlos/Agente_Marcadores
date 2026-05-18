@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block content %}
+<form action="/analyze" method="post" enctype="multipart/form-data">
+  <label>Carpeta objetivo:</label><input type="text" name="target_folder" value="Pendientes"><br>
+  <label><input type="checkbox" name="use_file" value="true"> Usar archivo exportado</label>
+  <input type="file" name="file"><br>
+  <label><input type="checkbox" name="use_chrome" value="true"> Leer Chrome</label><br>
+  <label><input type="checkbox" name="use_edge" value="true"> Leer Edge</label><br>
+  <button type="submit">Analizar</button>
+</form>
+{% endblock %}

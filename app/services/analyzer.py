@@ -10,20 +10,39 @@ from app.services.report_generator import write_reports
 from app.services.rule_classifier import classify
 from app.services.scheduler import build_7_day_schedule
 
+NOT_VALIDATED = "NOT_VALIDATED"
 
-def run_analysis(bookmarks: list[Bookmark], target_folder: str = "Pendientes") -> AnalysisSummary:
+
+def run_analysis(
+    bookmarks: list[Bookmark],
+    target_folder: str = "Pendientes",
+    *,
+    limit: int | None = None,
+    skip_validation: bool = False,
+) -> AnalysisSummary:
     warning = None
-    scoped = [b for b in bookmarks if target_folder.lower() in (b.folder_path or "").lower()]
-    if not scoped:
+    folder_filter = (target_folder or "").strip().lower()
+
+    if folder_filter:
+        scoped = [b for b in bookmarks if folder_filter in (b.folder_path or "").lower()]
+    else:
+        scoped = bookmarks
+
+    if folder_filter and not scoped:
         warning = f"No se encontró carpeta '{target_folder}'. Se analizaron todos los bookmarks."
         scoped = bookmarks
+
+    if limit is not None:
+        if limit < 1:
+            raise ValueError("limit debe ser mayor o igual a 1")
+        scoped = scoped[:limit]
 
     normalized = [normalize_url(b.url) for b in scoped]
     duplicate_set = detect_duplicates(normalized)
 
     analyzed: list[BookmarkAnalysis] = []
     for b, nurl in zip(scoped, normalized):
-        status = validate_url(b.url, settings.request_timeout)
+        status = NOT_VALIDATED if skip_validation else validate_url(b.url, settings.request_timeout)
         category = classify(b.title, b.url, b.folder_path)
         dup = nurl in duplicate_set
         score, action, reason = score_bookmark(category, status, b.folder_path, dup, b.title, b.url)

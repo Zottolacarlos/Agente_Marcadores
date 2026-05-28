@@ -1,11 +1,63 @@
 {% extends 'base.html' %}
 {% block content %}
-<form action="/analyze" method="post" enctype="multipart/form-data">
-  <label>Carpeta objetivo:</label><input type="text" name="target_folder" value="Pendientes"><br>
-  <label><input type="checkbox" name="use_file" value="true"> Usar archivo exportado</label>
-  <input type="file" name="file"><br>
-  <label><input type="checkbox" name="use_chrome" value="true"> Leer Chrome</label><br>
-  <label><input type="checkbox" name="use_edge" value="true"> Leer Edge</label><br>
-  <button type="submit">Analizar</button>
-</form>
+<section class="card">
+  <h2>Nuevo análisis</h2>
+  <p class="muted">Subí un export de favoritos o intentá leer bookmarks locales de Chrome/Edge.</p>
+
+  {% if error %}
+    <div class="alert alert-error"><strong>Error:</strong> {{ error }}</div>
+  {% endif %}
+
+  {% if source_errors %}
+    <div class="alert alert-warning">
+      <strong>Advertencias de origen:</strong>
+      <ul>
+        {% for source_error in source_errors %}<li>{{ source_error }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <form action="/analyze" method="post" enctype="multipart/form-data">
+    <div class="grid grid-2">
+      <div>
+        <label for="target_folder">Carpeta objetivo</label>
+        <input id="target_folder" type="text" name="target_folder" value="{{ defaults.target_folder if defaults else 'Pendientes' }}" placeholder="Ej: Barra de favoritos/Metalico">
+        <p class="small muted">La búsqueda es flexible: alcanza con una parte del path, por ejemplo <strong>Metalico</strong>.</p>
+      </div>
+
+      <div>
+        <label for="limit">Límite opcional</label>
+        <input id="limit" type="number" min="1" name="limit" value="{{ defaults.limit if defaults else '' }}" placeholder="Ej: 20">
+        <p class="small muted">Útil para probar carpetas grandes sin analizar miles de links.</p>
+      </div>
+    </div>
+
+    <div class="card" style="box-shadow:none; margin-top:16px;">
+      <h3>Origen de bookmarks</h3>
+      <label class="checkbox-row"><input type="checkbox" name="use_file" value="true" checked> Usar archivo exportado</label>
+      <input type="file" name="file" accept=".html,.htm,text/html">
+
+      <label class="checkbox-row"><input type="checkbox" name="use_chrome" value="true"> Leer Chrome local</label>
+      <label class="checkbox-row"><input type="checkbox" name="use_edge" value="true"> Leer Edge local</label>
+    </div>
+
+    <label class="checkbox-row">
+      <input type="checkbox" name="skip_validation" value="true" {% if not defaults or defaults.skip_validation %}checked{% endif %}>
+      Omitir validación online de URLs
+    </label>
+    <p class="small muted">Recomendado para la primera pasada. Evita que el análisis se demore por consultar cientos o miles de links.</p>
+
+    <div class="actions">
+      <button type="submit">Analizar bookmarks</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Pruebas rápidas sugeridas</h2>
+  <p class="muted">Para exports grandes, empezá con una carpeta concreta, límite bajo y validación omitida.</p>
+  <pre>Carpeta: Barra de favoritos/Metalico
+Límite: 20
+Omitir validación: sí</pre>
+</section>
 {% endblock %}

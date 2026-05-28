@@ -1,14 +1,82 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Resumen</h2>
-<p>Total analizados: {{ summary.total }}</p>
-<p>Links OK: {{ summary.ok }}</p>
-<p>Links rotos: {{ summary.broken }}</p>
-<p>Duplicados: {{ summary.duplicates }}</p>
-<p>Para revisar/borrar: {{ summary.review_or_delete }}</p>
-{% if summary.warning %}<p><strong>Advertencia:</strong> {{ summary.warning }}</p>{% endif %}
-<h3>Top 10 recomendados</h3><ul>
-{% for b in summary.top_recommended %}<li>{{ b.title }} - {{ b.score }} - {{ b.recommended_action }}</li>{% endfor %}
-</ul>
-<h3>Reportes</h3><ul>{% for r in summary.reports %}<li><a href="/reports/{{ r }}">{{ r }}</a></li>{% endfor %}</ul>
+<section class="card">
+  <h2>Resumen del análisis</h2>
+  <p class="muted">
+    Carpeta: <strong>{{ target_folder }}</strong>
+    {% if limit %} · Límite aplicado: <strong>{{ limit }}</strong>{% endif %}
+    · Validación online: <strong>{{ 'omitida' if skip_validation else 'activada' }}</strong>
+  </p>
+
+  {% if selected_sources %}
+    <p class="small muted">Origen: {{ selected_sources | join(', ') }}</p>
+  {% endif %}
+
+  {% if summary.warning %}
+    <div class="alert alert-warning"><strong>Advertencia:</strong> {{ summary.warning }}</div>
+  {% endif %}
+
+  {% if source_errors %}
+    <div class="alert alert-warning">
+      <strong>Advertencias de origen:</strong>
+      <ul>
+        {% for source_error in source_errors %}<li>{{ source_error }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <div class="grid grid-4">
+    <div class="metric"><strong>{{ summary.total }}</strong><span>Total</span></div>
+    <div class="metric"><strong>{{ summary.ok }}</strong><span>OK</span></div>
+    <div class="metric"><strong>{{ summary.broken }}</strong><span>Rotos</span></div>
+    <div class="metric"><strong>{{ summary.duplicates }}</strong><span>Duplicados</span></div>
+  </div>
+
+  <div class="actions">
+    <a class="button" href="/">Nuevo análisis</a>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Top recomendados</h2>
+  {% if summary.top_recommended %}
+    <table>
+      <thead>
+        <tr>
+          <th>Título</th>
+          <th>Categoría</th>
+          <th>Estado</th>
+          <th>Score</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in summary.top_recommended %}
+          <tr>
+            <td>
+              <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a><br>
+              <span class="small muted">{{ item.folder_path }}</span>
+              {% if item.reason %}<br><span class="small muted">{{ item.reason }}</span>{% endif %}
+            </td>
+            <td><span class="pill">{{ item.category }}</span></td>
+            <td>{{ item.status }}</td>
+            <td>{{ item.score }}</td>
+            <td>{{ item.recommended_action }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No hay resultados para mostrar.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Reportes generados</h2>
+  <ul>
+    {% for report in summary.reports %}
+      <li><a href="/reports/{{ report }}">{{ report }}</a></li>
+    {% endfor %}
+  </ul>
+</section>
 {% endblock %}

@@ -1,0 +1,656 @@
+diff --git a/app/routers/api_router.py b/app/routers/api_router.py
+index 132ea21..762a5f4 100644
+--- a/app/routers/api_router.py
++++ b/app/routers/api_router.py
+@@ -1,40 +1,55 @@
+-from fastapi import APIRouter
+-from pydantic import BaseModel
+-from app.models.bookmark import Bookmark
+-from app.repositories.sqlite_repository import SQLiteRepository
+-from app.services.analyzer import run_analysis
+-from app.services.chromium_bookmark_reader import read_chromium_bookmarks
+-from app.services.html_bookmark_parser import parse_bookmarks_html
+-
+-router = APIRouter(prefix="/api", tags=["api"])
+-
+-
+-class AnalyzeRequest(BaseModel):
+-    file_path: str | None = None
+-    browser: str | None = None
+-    folder: str = "Pendientes"
+-
+-
+-@router.post("/analyze")
+-def api_analyze(payload: AnalyzeRequest):
+-    bookmarks: list[Bookmark] = []
+-    if payload.file_path:
+-        with open(payload.file_path, "rb") as f:
+-            bookmarks.extend(parse_bookmarks_html(f.read()))
+-    if payload.browser:
+-        bms, err = read_chromium_bookmarks(payload.browser)
+-        if err:
+-            return {"error": err}
+-        bookmarks.extend(bms)
+-    return run_analysis(bookmarks, payload.folder).model_dump()
+-
+-
+-@router.get("/reports")
+-def api_reports():
+-    from pathlib import Path
+-    return {"reports": [p.name for p in Path('data/reports').glob('*') if p.is_file()]}
+-
+-
+-@router.get("/bookmarks")
+-def api_bookmarks():
+-    return SQLiteRepository().list_bookmarks()
++from __future__ import annotations
++
++from pathlib import Path
++
++from fastapi import APIRouter
++from pydantic import BaseModel, Field
++
++from app.config import settings
++from app.models.bookmark import Bookmark
++from app.repositories.sqlite_repository import SQLiteRepository
++from app.services.analyzer import run_analysis
++from app.services.chromium_bookmark_reader import read_chromium_bookmarks
++from app.services.html_bookmark_parser import parse_bookmarks_html
++
++router = APIRouter(prefix="/api", tags=["api"])
++
++
++class AnalyzeRequest(BaseModel):
++    file_path: str | None = None
++    browser: str | None = None
++    folder: str = "Pendientes"
++    limit: int | None = Field(default=None, ge=1)
++    skip_validation: bool = False
++
++
++@router.post("/analyze")
++def api_analyze(payload: AnalyzeRequest):
++    bookmarks: list[Bookmark] = []
++
++    if payload.file_path:
++        with open(payload.file_path, "rb") as f:
++            bookmarks.extend(parse_bookmarks_html(f.read()))
++
++    if payload.browser:
++        browser_bookmarks, error = read_chromium_bookmarks(payload.browser)
++        if error:
++            return {"error": error}
++        bookmarks.extend(browser_bookmarks)
++
++    return run_analysis(
++        bookmarks,
++        payload.folder,
++        limit=payload.limit,
++        skip_validation=payload.skip_validation,
++    ).model_dump()
++
++
++@router.get("/reports")
++def api_reports():
++    return {"reports": [p.name for p in settings.reports_dir.glob("*") if p.is_file()]}
++
++
++@router.get("/bookmarks")
++def api_bookmarks():
++    return SQLiteRepository().list_bookmarks()
+diff --git a/app/routers/web_router.py b/app/routers/web_router.py
+index 3f38b1e..15d9b54 100644
+--- a/app/routers/web_router.py
++++ b/app/routers/web_router.py
+@@ -1,38 +1,151 @@
+-from fastapi import APIRouter, Form, Request, UploadFile
+-from fastapi.responses import FileResponse, HTMLResponse
+-from fastapi.templating import Jinja2Templates
+-from app.config import settings
+-from app.models.bookmark import Bookmark
+-from app.services.analyzer import run_analysis
+-from app.services.chromium_bookmark_reader import read_chromium_bookmarks
+-from app.services.html_bookmark_parser import parse_bookmarks_html
+-
+-router = APIRouter()
+-templates = Jinja2Templates(directory=str(settings.base_dir / "app" / "templates"))
+-
+-
+-@router.get("/", response_class=HTMLResponse)
+-def home(request: Request):
+-    return templates.TemplateResponse("index.html", {"request": request})
+-
+-
+-@router.post("/analyze", response_class=HTMLResponse)
+-async def analyze(request: Request, target_folder: str = Form("Pendientes"), use_file: bool = Form(False), use_chrome: bool = Form(False), use_edge: bool = Form(False), file: UploadFile | None = None):
+-    bookmarks: list[Bookmark] = []
+-    if use_file and file:
+-        content = await file.read()
+-        bookmarks.extend(parse_bookmarks_html(content))
+-    if use_chrome:
+-        bms, _ = read_chromium_bookmarks("chrome")
+-        bookmarks.extend(bms)
+-    if use_edge:
+-        bms, _ = read_chromium_bookmarks("edge")
+-        bookmarks.extend(bms)
+-    summary = run_analysis(bookmarks, target_folder)
+-    return templates.TemplateResponse("summary.html", {"request": request, "summary": summary})
+-
+-
+-@router.get("/reports/{report_name}")
+-def get_report(report_name: str):
+-    file_path = settings.reports_dir / report_name
+-    return FileResponse(file_path)
++from __future__ import annotations
++
++from fastapi import APIRouter, Form, Request, UploadFile
++from fastapi.responses import FileResponse, HTMLResponse
++from fastapi.templating import Jinja2Templates
++
++from app.config import settings
++from app.models.bookmark import Bookmark
++from app.services.analyzer import run_analysis
++from app.services.chromium_bookmark_reader import read_chromium_bookmarks
++from app.services.html_bookmark_parser import parse_bookmarks_html
++
++router = APIRouter()
++templates = Jinja2Templates(directory=str(settings.base_dir / "app" / "templates"))
++
++
++def _parse_limit(raw_limit: str | None) -> tuple[int | None, str | None]:
++    if raw_limit is None or raw_limit.strip() == "":
++        return None, None
++
++    try:
++        limit = int(raw_limit)
++    except ValueError:
++        return None, "El límite debe ser un número entero."
++
++    if limit < 1:
++        return None, "El límite debe ser mayor o igual a 1."
++
++    return limit, None
++
++
++@router.get("/", response_class=HTMLResponse)
++def home(request: Request):
++    return templates.TemplateResponse(
++        "index.html",
++        {
++            "request": request,
++            "defaults": {
++                "target_folder": "Pendientes",
++                "limit": "",
++                "skip_validation": True,
++            },
++        },
++    )
++
++
++@router.post("/analyze", response_class=HTMLResponse)
++async def analyze(
++    request: Request,
++    target_folder: str = Form("Pendientes"),
++    limit: str = Form(""),
++    skip_validation: bool = Form(False),
++    use_file: bool = Form(False),
++    use_chrome: bool = Form(False),
++    use_edge: bool = Form(False),
++    file: UploadFile | None = None,
++):
++    bookmarks: list[Bookmark] = []
++    source_errors: list[str] = []
++    selected_sources: list[str] = []
++
++    parsed_limit, limit_error = _parse_limit(limit)
++    if limit_error:
++        return templates.TemplateResponse(
++            "index.html",
++            {
++                "request": request,
++                "error": limit_error,
++                "defaults": {
++                    "target_folder": target_folder,
++                    "limit": limit,
++                    "skip_validation": skip_validation,
++                },
++            },
++            status_code=400,
++        )
++
++    if use_file or (file and file.filename):
++        if not file or not file.filename:
++            source_errors.append("Seleccionaste archivo exportado, pero no subiste ningún archivo.")
++        else:
++            content = await file.read()
++            parsed = parse_bookmarks_html(content)
++            bookmarks.extend(parsed)
++            selected_sources.append(f"Archivo exportado ({len(parsed)} bookmarks)")
++
++    if use_chrome:
++        chrome_bookmarks, chrome_error = read_chromium_bookmarks("chrome")
++        if chrome_error:
++            source_errors.append(f"Chrome: {chrome_error}")
++        else:
++            bookmarks.extend(chrome_bookmarks)
++            selected_sources.append(f"Chrome ({len(chrome_bookmarks)} bookmarks)")
++
++    if use_edge:
++        edge_bookmarks, edge_error = read_chromium_bookmarks("edge")
++        if edge_error:
++            source_errors.append(f"Edge: {edge_error}")
++        else:
++            bookmarks.extend(edge_bookmarks)
++            selected_sources.append(f"Edge ({len(edge_bookmarks)} bookmarks)")
++
++    if not bookmarks:
++        return templates.TemplateResponse(
++            "index.html",
++            {
++                "request": request,
++                "error": "No se cargaron bookmarks para analizar.",
++                "source_errors": source_errors,
++                "defaults": {
++                    "target_folder": target_folder,
++                    "limit": limit,
++                    "skip_validation": skip_validation,
++                },
++            },
++            status_code=400,
++        )
++
++    summary = run_analysis(
++        bookmarks,
++        target_folder,
++        limit=parsed_limit,
++        skip_validation=skip_validation,
++    )
++
++    return templates.TemplateResponse(
++        "summary.html",
++        {
++            "request": request,
++            "summary": summary,
++            "source_errors": source_errors,
++            "selected_sources": selected_sources,
++            "target_folder": target_folder,
++            "limit": parsed_limit,
++            "skip_validation": skip_validation,
++        },
++    )
++
++
++@router.get("/reports/{report_name}")
++def get_report(report_name: str):
++    file_path = (settings.reports_dir / report_name).resolve()
++    reports_dir = settings.reports_dir.resolve()
++
++    if reports_dir not in file_path.parents and file_path != reports_dir:
++        return HTMLResponse("Reporte inválido", status_code=400)
++
++    if not file_path.exists() or not file_path.is_file():
++        return HTMLResponse("Reporte no encontrado", status_code=404)
++
++    return FileResponse(file_path)
+diff --git a/app/templates/base.html b/app/templates/base.html
+index 90c37c6..a2d969c 100644
+--- a/app/templates/base.html
++++ b/app/templates/base.html
+@@ -1,5 +1,156 @@
+-<!doctype html>
+-<html><head><meta charset="utf-8"><title>Bookmark Curator</title></head><body>
+-<h1>Bookmark Curator Agent</h1>
+-{% block content %}{% endblock %}
+-</body></html>
++<!doctype html>
++<html lang="es">
++<head>
++  <meta charset="utf-8">
++  <meta name="viewport" content="width=device-width, initial-scale=1">
++  <title>Bookmark Curator</title>
++  <style>
++    :root {
++      --bg: #f6f7fb;
++      --card: #ffffff;
++      --text: #1f2937;
++      --muted: #6b7280;
++      --border: #e5e7eb;
++      --primary: #2563eb;
++      --primary-dark: #1d4ed8;
++      --warning: #92400e;
++      --error-bg: #fef2f2;
++      --error-text: #991b1b;
++    }
++
++    * { box-sizing: border-box; }
++
++    body {
++      margin: 0;
++      font-family: Arial, Helvetica, sans-serif;
++      background: var(--bg);
++      color: var(--text);
++      line-height: 1.5;
++    }
++
++    header {
++      background: #111827;
++      color: white;
++      padding: 24px 32px;
++    }
++
++    header h1 { margin: 0 0 4px; font-size: 28px; }
++    header p { margin: 0; color: #d1d5db; }
++
++    main {
++      width: min(1120px, calc(100% - 32px));
++      margin: 24px auto 48px;
++    }
++
++    .card {
++      background: var(--card);
++      border: 1px solid var(--border);
++      border-radius: 14px;
++      padding: 20px;
++      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
++      margin-bottom: 18px;
++    }
++
++    .grid { display: grid; gap: 16px; }
++    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
++    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
++
++    label { display: block; font-weight: 600; margin-bottom: 6px; }
++
++    input[type="text"], input[type="number"], input[type="file"] {
++      width: 100%;
++      padding: 10px 12px;
++      border: 1px solid var(--border);
++      border-radius: 10px;
++      background: white;
++    }
++
++    .checkbox-row {
++      display: flex;
++      gap: 8px;
++      align-items: center;
++      margin: 8px 0;
++      font-weight: 500;
++    }
++
++    .checkbox-row input { margin: 0; }
++
++    button, .button {
++      display: inline-block;
++      border: 0;
++      border-radius: 10px;
++      background: var(--primary);
++      color: white;
++      padding: 10px 16px;
++      font-weight: 700;
++      cursor: pointer;
++      text-decoration: none;
++    }
++
++    button:hover, .button:hover { background: var(--primary-dark); }
++
++    .muted { color: var(--muted); }
++    .small { font-size: 14px; }
++
++    .alert {
++      border-radius: 12px;
++      padding: 12px 14px;
++      margin-bottom: 16px;
++    }
++
++    .alert-error { background: var(--error-bg); color: var(--error-text); border: 1px solid #fecaca; }
++    .alert-warning { background: #fffbeb; color: var(--warning); border: 1px solid #fde68a; }
++
++    .metric {
++      background: #f9fafb;
++      border: 1px solid var(--border);
++      border-radius: 12px;
++      padding: 14px;
++    }
++
++    .metric strong { display: block; font-size: 26px; }
++    .metric span { color: var(--muted); font-size: 14px; }
++
++    table {
++      width: 100%;
++      border-collapse: collapse;
++      background: white;
++    }
++
++    th, td {
++      border-bottom: 1px solid var(--border);
++      padding: 10px 8px;
++      text-align: left;
++      vertical-align: top;
++    }
++
++    th { font-size: 14px; color: var(--muted); }
++
++    .pill {
++      display: inline-block;
++      padding: 4px 8px;
++      border-radius: 999px;
++      background: #eef2ff;
++      color: #3730a3;
++      font-size: 13px;
++      font-weight: 700;
++    }
++
++    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
++
++    @media (max-width: 800px) {
++      .grid-2, .grid-4 { grid-template-columns: 1fr; }
++      header { padding: 20px; }
++    }
++  </style>
++</head>
++<body>
++  <header>
++    <h1>Bookmark Curator Agent</h1>
++    <p>Ordená pendientes, detectá links problemáticos y generá reportes accionables.</p>
++  </header>
++  <main>
++    {% block content %}{% endblock %}
++  </main>
++</body>
++</html>
+diff --git a/app/templates/index.html b/app/templates/index.html
+index 4a26194..5dd16fb 100644
+--- a/app/templates/index.html
++++ b/app/templates/index.html
+@@ -1,11 +1,63 @@
+-{% extends 'base.html' %}
+-{% block content %}
+-<form action="/analyze" method="post" enctype="multipart/form-data">
+-  <label>Carpeta objetivo:</label><input type="text" name="target_folder" value="Pendientes"><br>
+-  <label><input type="checkbox" name="use_file" value="true"> Usar archivo exportado</label>
+-  <input type="file" name="file"><br>
+-  <label><input type="checkbox" name="use_chrome" value="true"> Leer Chrome</label><br>
+-  <label><input type="checkbox" name="use_edge" value="true"> Leer Edge</label><br>
+-  <button type="submit">Analizar</button>
+-</form>
+-{% endblock %}
++{% extends 'base.html' %}
++{% block content %}
++<section class="card">
++  <h2>Nuevo análisis</h2>
++  <p class="muted">Subí un export de favoritos o intentá leer bookmarks locales de Chrome/Edge.</p>
++
++  {% if error %}
++    <div class="alert alert-error"><strong>Error:</strong> {{ error }}</div>
++  {% endif %}
++
++  {% if source_errors %}
++    <div class="alert alert-warning">
++      <strong>Advertencias de origen:</strong>
++      <ul>
++        {% for source_error in source_errors %}<li>{{ source_error }}</li>{% endfor %}
++      </ul>
++    </div>
++  {% endif %}
++
++  <form action="/analyze" method="post" enctype="multipart/form-data">
++    <div class="grid grid-2">
++      <div>
++        <label for="target_folder">Carpeta objetivo</label>
++        <input id="target_folder" type="text" name="target_folder" value="{{ defaults.target_folder if defaults else 'Pendientes' }}" placeholder="Ej: Barra de favoritos/Metalico">
++        <p class="small muted">La búsqueda es flexible: alcanza con una parte del path, por ejemplo <strong>Metalico</strong>.</p>
++      </div>
++
++      <div>
++        <label for="limit">Límite opcional</label>
++        <input id="limit" type="number" min="1" name="limit" value="{{ defaults.limit if defaults else '' }}" placeholder="Ej: 20">
++        <p class="small muted">Útil para probar carpetas grandes sin analizar miles de links.</p>
++      </div>
++    </div>
++
++    <div class="card" style="box-shadow:none; margin-top:16px;">
++      <h3>Origen de bookmarks</h3>
++      <label class="checkbox-row"><input type="checkbox" name="use_file" value="true" checked> Usar archivo exportado</label>
++      <input type="file" name="file" accept=".html,.htm,text/html">
++
++      <label class="checkbox-row"><input type="checkbox" name="use_chrome" value="true"> Leer Chrome local</label>
++      <label class="checkbox-row"><input type="checkbox" name="use_edge" value="true"> Leer Edge local</label>
++    </div>
++
++    <label class="checkbox-row">
++      <input type="checkbox" name="skip_validation" value="true" {% if not defaults or defaults.skip_validation %}checked{% endif %}>
++      Omitir validación online de URLs
++    </label>
++    <p class="small muted">Recomendado para la primera pasada. Evita que el análisis se demore por consultar cientos o miles de links.</p>
++
++    <div class="actions">
++      <button type="submit">Analizar bookmarks</button>
++    </div>
++  </form>
++</section>
++
++<section class="card">
++  <h2>Pruebas rápidas sugeridas</h2>
++  <p class="muted">Para exports grandes, empezá con una carpeta concreta, límite bajo y validación omitida.</p>
++  <pre>Carpeta: Barra de favoritos/Metalico
++Límite: 20
++Omitir validación: sí</pre>
++</section>
++{% endblock %}
+diff --git a/app/templates/report.html b/app/templates/report.html
+index 5a36b14..16ec759 100644
+--- a/app/templates/report.html
++++ b/app/templates/report.html
+@@ -1,4 +1,7 @@
+-{% extends 'base.html' %}
+-{% block content %}
+-<pre>{{ content }}</pre>
+-{% endblock %}
++{% extends 'base.html' %}
++{% block content %}
++<section class="card">
++  <h2>{{ report_name }}</h2>
++  <pre>{{ content }}</pre>
++</section>
++{% endblock %}
+diff --git a/app/templates/summary.html b/app/templates/summary.html
+index 062c791..0453ac5 100644
+--- a/app/templates/summary.html
++++ b/app/templates/summary.html
+@@ -1,14 +1,82 @@
+-{% extends 'base.html' %}
+-{% block content %}
+-<h2>Resumen</h2>
+-<p>Total analizados: {{ summary.total }}</p>
+-<p>Links OK: {{ summary.ok }}</p>
+-<p>Links rotos: {{ summary.broken }}</p>
+-<p>Duplicados: {{ summary.duplicates }}</p>
+-<p>Para revisar/borrar: {{ summary.review_or_delete }}</p>
+-{% if summary.warning %}<p><strong>Advertencia:</strong> {{ summary.warning }}</p>{% endif %}
+-<h3>Top 10 recomendados</h3><ul>
+-{% for b in summary.top_recommended %}<li>{{ b.title }} - {{ b.score }} - {{ b.recommended_action }}</li>{% endfor %}
+-</ul>
+-<h3>Reportes</h3><ul>{% for r in summary.reports %}<li><a href="/reports/{{ r }}">{{ r }}</a></li>{% endfor %}</ul>
+-{% endblock %}
++{% extends 'base.html' %}
++{% block content %}
++<section class="card">
++  <h2>Resumen del análisis</h2>
++  <p class="muted">
++    Carpeta: <strong>{{ target_folder }}</strong>
++    {% if limit %} · Límite aplicado: <strong>{{ limit }}</strong>{% endif %}
++    · Validación online: <strong>{{ 'omitida' if skip_validation else 'activada' }}</strong>
++  </p>
++
++  {% if selected_sources %}
++    <p class="small muted">Origen: {{ selected_sources | join(', ') }}</p>
++  {% endif %}
++
++  {% if summary.warning %}
++    <div class="alert alert-warning"><strong>Advertencia:</strong> {{ summary.warning }}</div>
++  {% endif %}
++
++  {% if source_errors %}
++    <div class="alert alert-warning">
++      <strong>Advertencias de origen:</strong>
++      <ul>
++        {% for source_error in source_errors %}<li>{{ source_error }}</li>{% endfor %}
++      </ul>
++    </div>
++  {% endif %}
++
++  <div class="grid grid-4">
++    <div class="metric"><strong>{{ summary.total }}</strong><span>Total</span></div>
++    <div class="metric"><strong>{{ summary.ok }}</strong><span>OK</span></div>
++    <div class="metric"><strong>{{ summary.broken }}</strong><span>Rotos</span></div>
++    <div class="metric"><strong>{{ summary.duplicates }}</strong><span>Duplicados</span></div>
++  </div>
++
++  <div class="actions">
++    <a class="button" href="/">Nuevo análisis</a>
++  </div>
++</section>
++
++<section class="card">
++  <h2>Top recomendados</h2>
++  {% if summary.top_recommended %}
++    <table>
++      <thead>
++        <tr>
++          <th>Título</th>
++          <th>Categoría</th>
++          <th>Estado</th>
++          <th>Score</th>
++          <th>Acción</th>
++        </tr>
++      </thead>
++      <tbody>
++        {% for item in summary.top_recommended %}
++          <tr>
++            <td>
++              <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a><br>
++              <span class="small muted">{{ item.folder_path }}</span>
++              {% if item.reason %}<br><span class="small muted">{{ item.reason }}</span>{% endif %}
++            </td>
++            <td><span class="pill">{{ item.category }}</span></td>
++            <td>{{ item.status }}</td>
++            <td>{{ item.score }}</td>
++            <td>{{ item.recommended_action }}</td>
++          </tr>
++        {% endfor %}
++      </tbody>
++    </table>
++  {% else %}
++    <p class="muted">No hay resultados para mostrar.</p>
++  {% endif %}
++</section>
++
++<section class="card">
++  <h2>Reportes generados</h2>
++  <ul>
++    {% for report in summary.reports %}
++      <li><a href="/reports/{{ report }}">{{ report }}</a></li>
++    {% endfor %}
++  </ul>
++</section>
++{% endblock %}

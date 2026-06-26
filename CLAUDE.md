@@ -8,7 +8,8 @@ This project is worked on from multiple Windows machines at **different absolute
 
 - **At the start of every session, read `.claude/CONTEXTO.md`** — it's the versioned handoff log: current state, what we were doing, decisions, and next steps.
 - **At the end of every session, update `.claude/CONTEXTO.md`** (last session, in-progress work, new decisions) so the next device picks up the thread. Keep it short — it's a live handoff, not an append-only history.
-- The user's workflow is: `git pull` → work → ask Claude to update `CONTEXTO.md` and commit → `git push`. One device at a time.
+- The user's workflow is: `git pull` → work → Claude updates `CONTEXTO.md` and commits → `git push`. One device at a time.
+- **Standing instruction (user, 2026-06-26): in this project Claude generates the commit AND the push without asking.** When work reaches a sensible stopping point, commit (single ordered commit, `perfil.md`/`.env` excluded) and `git push origin main` — don't ask for confirmation. Tests should be green and ruff clean before committing.
 - Do **not** rely on the harness memory dir (`~/.claude/projects/.../memory/`) for cross-device state — it's local to one machine. Durable, portable context goes in `.claude/CONTEXTO.md`.
 
 ## What this is

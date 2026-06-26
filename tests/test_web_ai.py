@@ -1,0 +1,48 @@
+from fastapi.testclient import TestClient
+
+from app.main import app
+from app.models.ai import AIBookmarkClassification
+from app.services import ai_classifier
+
+client = TestClient(app)
+
+SAMPLE = (
+    b"<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p><DT><H3>Pendientes</H3>"
+    b'<DL><p><DT><A HREF="https://fastapi.tiangolo.com">FastAPI</A></DL></DL>'
+)
+
+
+def test_home_shows_ai_checkbox():
+    r = client.get("/")
+    assert r.status_code == 200
+    assert 'name="use_ai"' in r.text
+
+
+def test_analyze_with_ai_renders_banner(monkeypatch):
+    monkeypatch.setattr(ai_classifier, "is_ai_available", lambda: True)
+    monkeypatch.setattr(
+        ai_classifier,
+        "classify_bookmark_with_ai",
+        lambda payload: AIBookmarkClassification(
+            category="python", subcategory="web", intent="aprender",
+            priority=90, recommended_action="leer_hoy", reason="relevante", confidence=0.95,
+        ),
+    )
+    r = client.post(
+        "/analyze",
+        data={"target_folder": "Pendientes", "skip_validation": "true", "use_ai": "true"},
+        files={"file": ("b.html", SAMPLE, "text/html")},
+    )
+    assert r.status_code == 200
+    assert "IA activada" in r.text
+    assert "pill-ai" in r.text
+
+
+def test_analyze_without_ai_has_no_banner():
+    r = client.post(
+        "/analyze",
+        data={"target_folder": "Pendientes", "skip_validation": "true"},
+        files={"file": ("b.html", SAMPLE, "text/html")},
+    )
+    assert r.status_code == 200
+    assert "IA activada" not in r.text

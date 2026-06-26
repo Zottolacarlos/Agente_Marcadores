@@ -4,6 +4,7 @@ import csv
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from app.config import settings
 from app.models.bookmark import BookmarkAnalysis
 
 
@@ -18,10 +19,23 @@ def _write_item(f, item: BookmarkAnalysis, index: int | None = None) -> None:
     f.write(f"- Carpeta: {_safe(item.folder_path)}\n")
     f.write(f"- Categoría: {item.category}\n")
     f.write(f"- Estado: {item.status}\n")
-    f.write(f"- Score: {item.score}\n")
+    if item.effective_score != item.score:
+        f.write(f"- Prioridad efectiva: {item.effective_score} (local {item.score})\n")
+    else:
+        f.write(f"- Score: {item.score}\n")
     f.write(f"- Acción: {item.recommended_action}\n")
     f.write(f"- Duplicado: {'sí' if item.duplicate else 'no'}\n")
-    f.write(f"- Motivo: {_safe(item.reason)}\n\n")
+    f.write(f"- Motivo: {_safe(item.reason)}\n")
+    if item.ai is not None:
+        low = " ⚠ baja confianza" if item.ai.confidence < settings.ai_min_confidence else ""
+        f.write(f"- IA · Categoría: {item.ai.category}")
+        if item.ai.subcategory:
+            f.write(f" / {item.ai.subcategory}")
+        f.write("\n")
+        f.write(f"- IA · Intención: {item.ai.intent}\n")
+        f.write(f"- IA · Acción sugerida: {item.ai.recommended_action} (prioridad {item.ai.priority}, confianza {item.ai.confidence:.2f}{low})\n")
+        f.write(f"- IA · Razón: {item.ai.reason}\n")
+    f.write("\n")
 
 
 def write_reports(reports_dir: Path, items: list[BookmarkAnalysis], schedule: dict[str, list[BookmarkAnalysis]]) -> list[str]:
@@ -62,7 +76,7 @@ def write_reports(reports_dir: Path, items: list[BookmarkAnalysis], schedule: di
         ]
         for action, title in sections:
             f.write(f"## {title}\n\n")
-            group = sorted(action_groups.get(action, []), key=lambda x: x.score, reverse=True)
+            group = sorted(action_groups.get(action, []), key=lambda x: x.effective_score, reverse=True)
             if not group:
                 f.write("Sin elementos.\n\n")
                 continue
@@ -105,7 +119,7 @@ def write_reports(reports_dir: Path, items: list[BookmarkAnalysis], schedule: di
                 f.write(f"  - Carpeta: {_safe(item.folder_path)}\n")
                 f.write(f"  - Categoría: {item.category}\n")
                 f.write(f"  - Motivo: {_safe(item.reason)}\n")
-                f.write(f"  - Prioridad: {item.score}\n")
+                f.write(f"  - Prioridad: {item.effective_score}\n")
             f.write("\n")
     files.append(chrono.name)
 
@@ -115,7 +129,8 @@ def write_reports(reports_dir: Path, items: list[BookmarkAnalysis], schedule: di
             f,
             fieldnames=[
                 "title", "url", "normalized_url", "folder_path", "category", "status", "score",
-                "recommended_action", "duplicate", "reason",
+                "effective_score", "recommended_action", "duplicate", "reason",
+                "ai_category", "ai_intent", "ai_action", "ai_priority", "ai_confidence", "ai_reason",
             ],
         )
         writer.writeheader()
@@ -128,9 +143,16 @@ def write_reports(reports_dir: Path, items: list[BookmarkAnalysis], schedule: di
                 "category": i.category,
                 "status": i.status,
                 "score": i.score,
+                "effective_score": i.effective_score,
                 "recommended_action": i.recommended_action,
                 "duplicate": i.duplicate,
                 "reason": i.reason,
+                "ai_category": i.ai.category if i.ai else "",
+                "ai_intent": i.ai.intent if i.ai else "",
+                "ai_action": i.ai.recommended_action if i.ai else "",
+                "ai_priority": i.ai.priority if i.ai else "",
+                "ai_confidence": i.ai.confidence if i.ai else "",
+                "ai_reason": i.ai.reason if i.ai else "",
             })
     files.append(csv_file.name)
     return files

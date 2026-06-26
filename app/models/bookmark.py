@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.models.ai import AIBookmarkClassification
+
 
 class Bookmark(BaseModel):
     title: str
@@ -20,3 +22,7 @@ class BookmarkAnalysis(BaseModel):
     recommended_action: str
     duplicate: bool = False
     reason: str = ""
+    # Score que manda el orden/acción. = score local, salvo que el blending con IA lo modifique.
+    effective_score: int = 0
+    # Capa IA opcional (aditiva). None = no se enriqueció con IA.
+    ai: AIBookmarkClassification | None = None

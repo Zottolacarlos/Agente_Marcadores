@@ -2,6 +2,9 @@ __pycache__/
 *.pyc
 .venv/
 .env
+# Datos personales: el repo es PÚBLICO. perfil.md tiene contexto laboral real
+# (IMSA/Danone/PRODUCCION) y NO se versiona. La plantilla perfil.example.md sí.
+perfil.md
 *.db
 data/input/*
 !data/input/.gitkeep

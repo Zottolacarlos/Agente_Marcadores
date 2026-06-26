@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Form, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.models.bookmark import Bookmark
+from app.services.ai_classifier import is_ai_available
 from app.services.analyzer import run_analysis
 from app.services.chromium_bookmark_reader import read_chromium_bookmarks
+from app.services.folder_tree import extract_folder_tree
 from app.services.html_bookmark_parser import parse_bookmarks_html
 
 router = APIRouter()
@@ -36,10 +38,12 @@ def home(request: Request):
         "index.html",
         {
             "request": request,
+            "ai_available": is_ai_available(),
             "defaults": {
                 "target_folder": "Pendientes",
                 "limit": "",
                 "skip_validation": True,
+                "use_ai": False,
             },
         },
     )
@@ -51,6 +55,7 @@ async def analyze(
     target_folder: str = Form("Pendientes"),
     limit: str = Form(""),
     skip_validation: bool = Form(False),
+    use_ai: bool = Form(False),
     use_file: bool = Form(False),
     use_chrome: bool = Form(False),
     use_edge: bool = Form(False),
@@ -68,10 +73,12 @@ async def analyze(
             {
                 "request": request,
                 "error": limit_error,
+                "ai_available": is_ai_available(),
                 "defaults": {
                     "target_folder": target_folder,
                     "limit": limit,
                     "skip_validation": skip_validation,
+                    "use_ai": use_ai,
                 },
             },
             status_code=400,
@@ -112,10 +119,12 @@ async def analyze(
                 "request": request,
                 "error": "No se cargaron bookmarks para analizar.",
                 "source_errors": source_errors,
+                "ai_available": is_ai_available(),
                 "defaults": {
                     "target_folder": target_folder,
                     "limit": limit,
                     "skip_validation": skip_validation,
+                    "use_ai": use_ai,
                 },
             },
             status_code=400,
@@ -126,6 +135,7 @@ async def analyze(
         target_folder,
         limit=parsed_limit,
         skip_validation=skip_validation,
+        use_ai=use_ai,
     )
 
     return templates.TemplateResponse(
@@ -139,7 +149,46 @@ async def analyze(
             "target_folder": target_folder,
             "limit": parsed_limit,
             "skip_validation": skip_validation,
+            "use_ai": use_ai,
         },
+    )
+
+
+@router.post("/folders")
+async def folders(
+    use_chrome: bool = Form(False),
+    use_edge: bool = Form(False),
+    file: UploadFile | None = None,
+):
+    """Detecta las carpetas (1er y 2do nivel) del origen elegido, para sugerirlas
+    en la UI. No valida links: es una pasada rápida sobre el árbol de marcadores."""
+    bookmarks: list[Bookmark] = []
+    errors: list[str] = []
+
+    if file and file.filename:
+        content = await file.read()
+        bookmarks.extend(parse_bookmarks_html(content))
+
+    if use_chrome:
+        chrome_bookmarks, chrome_error = read_chromium_bookmarks("chrome")
+        if chrome_error:
+            errors.append(f"Chrome: {chrome_error}")
+        else:
+            bookmarks.extend(chrome_bookmarks)
+
+    if use_edge:
+        edge_bookmarks, edge_error = read_chromium_bookmarks("edge")
+        if edge_error:
+            errors.append(f"Edge: {edge_error}")
+        else:
+            bookmarks.extend(edge_bookmarks)
+
+    return JSONResponse(
+        {
+            "folders": extract_folder_tree(bookmarks),
+            "errors": errors,
+            "total": len(bookmarks),
+        }
     )
 
 

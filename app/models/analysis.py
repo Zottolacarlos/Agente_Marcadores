@@ -11,3 +11,6 @@ class AnalysisSummary(BaseModel):
     top_recommended: list[BookmarkAnalysis]
     reports: list[str]
     warning: str | None = None
+    ai_used: bool = False
+    ai_enriched: int = 0
+    ai_low_confidence: int = 0

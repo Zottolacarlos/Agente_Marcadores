@@ -2,7 +2,7 @@
 {% block content %}
 <section class="card">
   <h2>Nuevo análisis</h2>
-  <p class="muted">Subí un export de favoritos o intentá leer bookmarks locales de Chrome/Edge.</p>
+  <p class="muted">Subí un export de favoritos o leé los bookmarks locales de Chrome/Edge. Después elegí qué carpeta querés ordenar.</p>
 
   {% if error %}
     <div class="alert alert-error"><strong>Error:</strong> {{ error }}</div>
@@ -18,34 +18,57 @@
   {% endif %}
 
   <form action="/analyze" method="post" enctype="multipart/form-data">
-    <div class="grid grid-2">
-      <div>
-        <label for="target_folder">Carpeta objetivo</label>
-        <input id="target_folder" type="text" name="target_folder" value="{{ defaults.target_folder if defaults else 'Pendientes' }}" placeholder="Ej: Barra de favoritos/Metalico">
-        <p class="small muted">La búsqueda es flexible: alcanza con una parte del path, por ejemplo <strong>Metalico</strong>.</p>
-      </div>
-
-      <div>
-        <label for="limit">Límite opcional</label>
-        <input id="limit" type="number" min="1" name="limit" value="{{ defaults.limit if defaults else '' }}" placeholder="Ej: 20">
-        <p class="small muted">Útil para probar carpetas grandes sin analizar miles de links.</p>
-      </div>
-    </div>
-
-    <div class="card" style="box-shadow:none; margin-top:16px;">
-      <h3>Origen de bookmarks</h3>
+    <div class="card" style="box-shadow:none; margin-top:4px;">
+      <h3>1 · Origen de bookmarks</h3>
       <label class="checkbox-row"><input type="checkbox" name="use_file" value="true" checked> Usar archivo exportado</label>
       <input type="file" name="file" accept=".html,.htm,text/html">
+      <div id="file-info" class="file-info" hidden></div>
+      <p class="small muted">Exportá tus favoritos desde el navegador (Administrador de favoritos → Exportar) y subí el <code>.html</code> acá. No hace falta copiarlo al proyecto.</p>
 
       <label class="checkbox-row"><input type="checkbox" name="use_chrome" value="true"> Leer Chrome local</label>
       <label class="checkbox-row"><input type="checkbox" name="use_edge" value="true"> Leer Edge local</label>
     </div>
 
-    <label class="checkbox-row">
-      <input type="checkbox" name="skip_validation" value="true" {% if not defaults or defaults.skip_validation %}checked{% endif %}>
-      Omitir validación online de URLs
-    </label>
-    <p class="small muted">Recomendado para la primera pasada. Evita que el análisis se demore por consultar cientos o miles de links.</p>
+    <div class="card" style="box-shadow:none;">
+      <h3>2 · Carpeta objetivo</h3>
+      <input id="target_folder" type="text" name="target_folder" value="{{ defaults.target_folder if defaults else 'Pendientes' }}" placeholder="Ej: Barra de favoritos/Metalico">
+      <p class="small muted">La búsqueda es flexible: alcanza con una parte del path, por ejemplo <strong>Metalico</strong>. Dejalo vacío para analizar todo.</p>
+
+      <div class="actions" style="margin-top:10px;">
+        <button type="button" id="detect-folders" class="button-ghost">Detectar mis carpetas</button>
+      </div>
+      <p class="small muted" id="folder-status" style="margin-top:10px;">Elegí un origen para ver tus carpetas sugeridas.</p>
+      <div class="chips" id="folder-suggestions"></div>
+    </div>
+
+    <div class="card" style="box-shadow:none;">
+      <h3>3 · Opciones</h3>
+      <div class="grid grid-2">
+        <div>
+          <label for="limit">Límite opcional</label>
+          <input id="limit" type="number" min="1" name="limit" value="{{ defaults.limit if defaults else '' }}" placeholder="Ej: 20">
+          <p class="small muted">Útil para probar carpetas grandes sin analizar miles de links.</p>
+        </div>
+        <div>
+          <label>Validación online</label>
+          <label class="checkbox-row">
+            <input type="checkbox" name="skip_validation" value="true" {% if not defaults or defaults.skip_validation %}checked{% endif %}>
+            Omitir validación online de URLs
+          </label>
+          <p class="small muted">Recomendado para la primera pasada. Evita demoras por consultar cientos de links.</p>
+        </div>
+      </div>
+
+      <label class="checkbox-row" style="margin-top:6px;">
+        <input type="checkbox" name="use_ai" value="true" {% if defaults and defaults.use_ai %}checked{% endif %} {% if not ai_available %}disabled{% endif %}>
+        Usar IA para mejorar clasificación y prioridad
+      </label>
+      {% if ai_available %}
+        <p class="small muted">🔒 Solo se envía metadata (título, URL, carpeta) a la IA, nunca el contenido de la página. Usa tu perfil para priorizar con tu criterio. Tiene un costo por uso (centavos).</p>
+      {% else %}
+        <p class="small muted">IA no disponible: falta configurar <code>OPENAI_API_KEY</code> en <code>.env</code>. El análisis funciona igual con reglas locales.</p>
+      {% endif %}
+    </div>
 
     <div class="actions">
       <button type="submit">Analizar bookmarks</button>
@@ -53,11 +76,108 @@
   </form>
 </section>
 
-<section class="card">
-  <h2>Pruebas rápidas sugeridas</h2>
-  <p class="muted">Para exports grandes, empezá con una carpeta concreta, límite bajo y validación omitida.</p>
-  <pre>Carpeta: Barra de favoritos/Metalico
-Límite: 20
-Omitir validación: sí</pre>
-</section>
+<script>
+(function () {
+  const fileInput = document.querySelector('input[type="file"][name="file"]');
+  const fileCb = document.querySelector('input[name="use_file"]');
+  const chromeCb = document.querySelector('input[name="use_chrome"]');
+  const edgeCb = document.querySelector('input[name="use_edge"]');
+  const target = document.getElementById('target_folder');
+  const box = document.getElementById('folder-suggestions');
+  const statusEl = document.getElementById('folder-status');
+  const fileInfo = document.getElementById('file-info');
+
+  function fmtSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(2) + ' MB';
+  }
+
+  function showFileInfo(extra) {
+    if (!fileInput || !fileInput.files.length) {
+      fileInfo.hidden = true;
+      fileInfo.textContent = '';
+      return;
+    }
+    const f = fileInput.files[0];
+    fileInfo.hidden = false;
+    fileInfo.innerHTML = '';
+    const ok = document.createElement('strong');
+    ok.textContent = '✓ ' + f.name;
+    const meta = document.createElement('span');
+    meta.className = 'muted';
+    meta.textContent = ' · ' + fmtSize(f.size) + (extra || '');
+    fileInfo.appendChild(ok);
+    fileInfo.appendChild(meta);
+  }
+
+  function hasSource() {
+    return (fileInput && fileInput.files && fileInput.files.length) ||
+           (chromeCb && chromeCb.checked) ||
+           (edgeCb && edgeCb.checked);
+  }
+
+  async function loadFolders() {
+    box.innerHTML = '';
+    if (!hasSource()) {
+      statusEl.textContent = 'Elegí un origen (archivo o navegador) para ver tus carpetas sugeridas.';
+      return;
+    }
+
+    const fd = new FormData();
+    if (fileInput && fileInput.files.length) fd.append('file', fileInput.files[0]);
+    if (chromeCb && chromeCb.checked) fd.append('use_chrome', 'true');
+    if (edgeCb && edgeCb.checked) fd.append('use_edge', 'true');
+
+    statusEl.textContent = 'Detectando carpetas…';
+    try {
+      const res = await fetch('/folders', { method: 'POST', body: fd });
+      renderFolders(await res.json());
+    } catch (e) {
+      statusEl.textContent = 'No se pudieron detectar las carpetas.';
+    }
+  }
+
+  function renderFolders(data) {
+    const folders = (data && data.folders) || [];
+    if (!folders.length) {
+      statusEl.textContent = (data && data.errors && data.errors.length)
+        ? data.errors.join(' · ')
+        : 'No se detectaron carpetas en el origen elegido.';
+      return;
+    }
+    statusEl.textContent = folders.length + ' carpetas detectadas (' + data.total + ' marcadores). Tocá una para usarla.';
+    if (fileInput && fileInput.files.length) showFileInfo(' · ' + data.total + ' marcadores detectados');
+    folders.forEach(function (f) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip chip-l' + f.level;
+
+      const label = document.createElement('span');
+      label.textContent = f.path;
+      const count = document.createElement('span');
+      count.className = 'chip-count';
+      count.textContent = f.count;
+
+      chip.appendChild(label);
+      chip.appendChild(count);
+      chip.addEventListener('click', function () {
+        target.value = f.path;
+        document.querySelectorAll('.chip.active').forEach(function (c) { c.classList.remove('active'); });
+        chip.classList.add('active');
+      });
+      box.appendChild(chip);
+    });
+  }
+
+  if (fileInput) fileInput.addEventListener('change', function () {
+    if (fileInput.files.length && fileCb) fileCb.checked = true;
+    showFileInfo();
+    loadFolders();
+  });
+  [chromeCb, edgeCb].forEach(function (cb) { if (cb) cb.addEventListener('change', loadFolders); });
+  const btn = document.getElementById('detect-folders');
+  if (btn) btn.addEventListener('click', loadFolders);
+})();
+</script>
 {% endblock %}

@@ -30,10 +30,20 @@ Abrir `http://localhost:8000`.
 
 ## Uso CLI
 ```bash
-python -m app.cli analyze --file data/input/bookmarks.html --folder Pendientes
-python -m app.cli analyze-browser --browser chrome --folder Pendientes
-python -m app.cli analyze-browser --browser edge --folder Pendientes
+python -m app.cli analyze examples/sample_bookmarks.html --folder Pendientes
+python -m app.cli analyze-browser chrome --folder Pendientes
+python -m app.cli analyze-browser edge --folder Pendientes
+# Flags útiles: --limit/-l N, --skip-validation (sin red), --use-ai (IA opcional)
 ```
+
+## IA opcional
+Apagada por defecto; el análisis funciona 100% con reglas locales. Para activarla:
+1. Copiá `.env.example` a `.env` y completá `OPENAI_API_KEY` (no se commitea).
+2. Agregá `--use-ai` al comando:
+   ```bash
+   python -m app.cli analyze examples/sample_bookmarks.html --folder Pendientes --skip-validation --use-ai
+   ```
+La IA es **aditiva**: enriquece cada bookmark (categoría/intención/razón) sin pisar la clasificación local, que queda siempre como fallback. Solo se envía metadata mínima (título, URL, carpeta, estado) — nunca el contenido de la página. Si no hay API key o algo falla, sigue con reglas locales. Variables: `OPENAI_MODEL`, `AI_MAX_BOOKMARKS`, `AI_TIMEOUT_SECONDS`.
 
 ## Exportar bookmarks manualmente
 Desde tu navegador exporta a `bookmarks.html` y guárdalo en `data/input/`.
@@ -52,7 +62,7 @@ Se guardan en `data/reports/`:
 ## Limitaciones
 - Firefox: pendiente (TODO).
 - Duplicados: solo por URL normalizada.
-- IA: interfaz preparada, sin clasificación activa aún.
+- IA: disponible vía `--use-ai` (etapa CLI). En la web todavía no está conectada.
 
 ## Próximos pasos (Fase 2)
 - IA opcional para clasificación fina y resumen por link.

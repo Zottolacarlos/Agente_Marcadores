@@ -14,6 +14,13 @@ class Settings(BaseModel):
     database_path: Path = data_dir / "bookmarks.db"
     request_timeout: float = float(os.getenv("REQUEST_TIMEOUT", "8"))
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
+    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    ai_max_bookmarks: int = int(os.getenv("AI_MAX_BOOKMARKS", "30"))
+    ai_timeout_seconds: float = float(os.getenv("AI_TIMEOUT_SECONDS", "30"))
+    ai_min_confidence: float = float(os.getenv("AI_MIN_CONFIDENCE", "0.7"))
+    # Peso de la prioridad IA en el score efectivo (blending). 0 = solo local, 1 = solo IA.
+    ai_blend_weight: float = float(os.getenv("AI_BLEND_WEIGHT", "0.6"))
+    perfil_path: Path = base_dir / os.getenv("PERFIL_PATH", "perfil.md")
 
 
 settings = Settings()

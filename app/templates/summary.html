@@ -32,6 +32,15 @@
     <div class="metric"><strong>{{ summary.duplicates }}</strong><span>Duplicados</span></div>
   </div>
 
+  {% if summary.ai_used %}
+    <div class="ai-banner">
+      🤖 <strong>IA activada</strong> · {{ summary.ai_enriched }} links enriquecidos con tu perfil
+      {% if summary.ai_low_confidence %} · <span style="color:var(--warning-text)">⚠ {{ summary.ai_low_confidence }} con baja confianza (revisalos)</span>{% endif %}
+    </div>
+  {% elif use_ai %}
+    <p class="small muted">IA solicitada pero no aplicada (ver advertencia arriba).</p>
+  {% endif %}
+
   <div class="actions">
     <a class="button" href="/">Nuevo análisis</a>
   </div>
@@ -39,6 +48,12 @@
 
 <section class="card">
   <h2>Top recomendados</h2>
+  <p class="small muted">
+    El <strong>score local</strong> (0–100) parte de una base de 30 y suma/resta por categoría, relevancia técnica,
+    si era un curso/tutorial, si estaba en <em>Pendientes</em>, estado del link y duplicados.
+    {% if summary.ai_used %}Con IA, la <strong>prioridad</strong> mostrada fusiona el score local con la prioridad IA (según tu perfil) cuando la confianza es suficiente.{% endif %}
+    Pasá el cursor sobre el número para ver el desglose local.
+  </p>
   {% if summary.top_recommended %}
     <table>
       <thead>
@@ -46,7 +61,7 @@
           <th>Título</th>
           <th>Categoría</th>
           <th>Estado</th>
-          <th>Score</th>
+          <th>Prioridad</th>
           <th>Acción</th>
         </tr>
       </thead>
@@ -56,12 +71,23 @@
             <td>
               <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a><br>
               <span class="small muted">{{ item.folder_path }}</span>
+              {% if item.ai %}<br><span class="small muted">🤖 {{ item.ai.intent }} — {{ item.ai.reason }}</span>{% endif %}
+            </td>
+            <td>
+              <span class="pill">{{ item.category }}</span>
+              {% if item.ai %}<br><span class="pill pill-ai" title="confianza {{ '%.2f'|format(item.ai.confidence) }}">IA: {{ item.ai.category }}{% if item.ai.subcategory %} / {{ item.ai.subcategory }}{% endif %}</span>{% endif %}
+            </td>
+            <td>{{ item.status }}</td>
+            <td>
+              <strong title="{{ item.reason }}">{{ item.effective_score }}</strong>
+              {% if item.effective_score != item.score %}<br><span class="small muted">local {{ item.score }} · IA {{ item.ai.priority }}</span>{% endif %}
               {% if item.reason %}<br><span class="small muted">{{ item.reason }}</span>{% endif %}
             </td>
-            <td><span class="pill">{{ item.category }}</span></td>
-            <td>{{ item.status }}</td>
-            <td>{{ item.score }}</td>
-            <td>{{ item.recommended_action }}</td>
+            <td>
+              {{ item.recommended_action }}
+              {% if item.ai %}<br><span class="small muted">IA: {{ item.ai.recommended_action }} ({{ item.ai.priority }})
+                {%- if item.ai.confidence < 0.5 %} ⚠{% endif %}</span>{% endif %}
+            </td>
           </tr>
         {% endfor %}
       </tbody>

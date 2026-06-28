@@ -10,16 +10,21 @@ def _bookmarks():
     ]
 
 
-def _fake_ai(payload):
+def _one(category="compras", priority=45, confidence=0.86):
     return AIBookmarkClassification(
-        category="compras",
+        category=category,
         subcategory="hardware_gaming",
         intent="posible compra futura",
-        priority=45,
+        priority=priority,
         recommended_action="ver_luego",
         reason="Tienda de hardware guardada como referencia de compra.",
-        confidence=0.86,
+        confidence=confidence,
     )
+
+
+def _fake_batch(result=None):
+    """Devuelve una función batch que da el mismo resultado para cada payload."""
+    return lambda payloads: [result for _ in payloads]
 
 
 def test_ai_disabled_by_default():
@@ -41,7 +46,7 @@ def test_use_ai_without_api_key_falls_back_to_local(monkeypatch):
 
 def test_ai_response_enriches_results(monkeypatch):
     monkeypatch.setattr(ai_classifier, "is_ai_available", lambda: True)
-    monkeypatch.setattr(ai_classifier, "classify_bookmark_with_ai", _fake_ai)
+    monkeypatch.setattr(ai_classifier, "classify_bookmarks_batch", _fake_batch(_one()))
     summary = analyzer.run_analysis(_bookmarks(), "Pendientes", skip_validation=True, use_ai=True)
     assert summary.ai_used is True
     assert summary.ai_enriched == 2
@@ -54,11 +59,16 @@ def test_ai_response_enriches_results(monkeypatch):
 
 def test_invalid_ai_response_keeps_local_result(monkeypatch):
     monkeypatch.setattr(ai_classifier, "is_ai_available", lambda: True)
-    monkeypatch.setattr(ai_classifier, "classify_bookmark_with_ai", lambda payload: None)
+    monkeypatch.setattr(ai_classifier, "classify_bookmarks_batch", _fake_batch(None))
     summary = analyzer.run_analysis(_bookmarks(), "Pendientes", skip_validation=True, use_ai=True)
     assert summary.ai_used is True
     assert summary.ai_enriched == 0
     assert all(item.ai is None for item in summary.top_recommended)
+
+
+def test_batch_returns_none_when_unavailable(monkeypatch):
+    monkeypatch.setattr(ai_classifier, "is_ai_available", lambda: False)
+    assert ai_classifier.classify_bookmarks_batch([{"title": "x"}, {"title": "y"}]) == [None, None]
 
 
 def test_is_ai_available_false_without_key(monkeypatch):
@@ -120,14 +130,11 @@ def test_profile_is_injected_in_system_prompt(tmp_path, monkeypatch):
 
 def test_low_confidence_is_counted(monkeypatch):
     monkeypatch.setattr(ai_classifier, "is_ai_available", lambda: True)
-
-    def _low_conf(payload):
-        return AIBookmarkClassification(
-            category="ia", subcategory=None, intent="x", priority=50,
-            recommended_action="revisar_manual", reason="dudoso", confidence=0.3,
-        )
-
-    monkeypatch.setattr(ai_classifier, "classify_bookmark_with_ai", _low_conf)
+    low = AIBookmarkClassification(
+        category="ia", subcategory=None, intent="x", priority=50,
+        recommended_action="revisar_manual", reason="dudoso", confidence=0.3,
+    )
+    monkeypatch.setattr(ai_classifier, "classify_bookmarks_batch", _fake_batch(low))
     summary = analyzer.run_analysis(_bookmarks(), "Pendientes", skip_validation=True, use_ai=True)
     assert summary.ai_low_confidence >= 1
     # IA dudosa NO debe mezclarse: el score efectivo queda igual al local.
@@ -139,14 +146,11 @@ def test_blending_applies_when_confident(monkeypatch):
     from app.config import settings
 
     monkeypatch.setattr(ai_classifier, "is_ai_available", lambda: True)
-
-    def _hi(payload):
-        return AIBookmarkClassification(
-            category="ia", subcategory=None, intent="x", priority=95,
-            recommended_action="leer_hoy", reason="muy relevante", confidence=0.95,
-        )
-
-    monkeypatch.setattr(ai_classifier, "classify_bookmark_with_ai", _hi)
+    hi = AIBookmarkClassification(
+        category="ia", subcategory=None, intent="x", priority=95,
+        recommended_action="leer_hoy", reason="muy relevante", confidence=0.95,
+    )
+    monkeypatch.setattr(ai_classifier, "classify_bookmarks_batch", _fake_batch(hi))
     summary = analyzer.run_analysis(_bookmarks(), "Pendientes", skip_validation=True, use_ai=True)
     top = summary.top_recommended[0]
     assert top.ai is not None

@@ -20,14 +20,11 @@ def test_home_shows_ai_checkbox():
 
 def test_analyze_with_ai_renders_banner(monkeypatch):
     monkeypatch.setattr(ai_classifier, "is_ai_available", lambda: True)
-    monkeypatch.setattr(
-        ai_classifier,
-        "classify_bookmark_with_ai",
-        lambda payload: AIBookmarkClassification(
-            category="python", subcategory="web", intent="aprender",
-            priority=90, recommended_action="leer_hoy", reason="relevante", confidence=0.95,
-        ),
+    cls = AIBookmarkClassification(
+        category="python", subcategory="web", intent="aprender",
+        priority=90, recommended_action="leer_hoy", reason="relevante", confidence=0.95,
     )
+    monkeypatch.setattr(ai_classifier, "classify_bookmarks_batch", lambda payloads: [cls for _ in payloads])
     r = client.post(
         "/analyze",
         data={"target_folder": "Pendientes", "skip_validation": "true", "use_ai": "true"},

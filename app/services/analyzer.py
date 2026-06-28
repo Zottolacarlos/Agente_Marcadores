@@ -96,20 +96,24 @@ def run_analysis(
     if use_ai:
         if ai_classifier.is_ai_available():
             ai_used = True
-            n_ai = min(len(analyzed_sorted), settings.ai_max_bookmarks)
-            logger.info("IA disponible. Enriqueciendo %d bookmarks (tope AI_MAX_BOOKMARKS=%d)...", n_ai, settings.ai_max_bookmarks)
-            w = settings.ai_blend_weight
-            for item in analyzed_sorted[: settings.ai_max_bookmarks]:
-                result = ai_classifier.classify_bookmark_with_ai(
-                    ai_classifier.build_payload(
-                        title=item.title,
-                        url=item.url,
-                        folder_path=item.folder_path,
-                        status=item.status,
-                        rule_category=item.category,
-                        rule_score=item.score,
-                    )
+            targets = analyzed_sorted[: settings.ai_max_bookmarks]
+            if len(analyzed_sorted) > settings.ai_max_bookmarks:
+                logger.warning("IA: %d analizados > tope AI_MAX_BOOKMARKS=%d; se enriquecen los primeros %d por score local", len(analyzed_sorted), settings.ai_max_bookmarks, len(targets))
+            logger.info("IA disponible. Clasificando %d bookmarks en lotes de %d...", len(targets), settings.ai_batch_size)
+            payloads = [
+                ai_classifier.build_payload(
+                    title=item.title,
+                    url=item.url,
+                    folder_path=item.folder_path,
+                    status=item.status,
+                    rule_category=item.category,
+                    rule_score=item.score,
                 )
+                for item in targets
+            ]
+            results = ai_classifier.classify_bookmarks_batch(payloads)
+            w = settings.ai_blend_weight
+            for item, result in zip(targets, results):
                 if result is None:
                     continue
                 item.ai = result

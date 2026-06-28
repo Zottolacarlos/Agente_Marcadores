@@ -41,11 +41,11 @@
 
 ### Hallazgos del análisis (diagnóstico con logs reales, 2026-06-28) — PRÓXIMOS FIXES
 El usuario corrió Landings (797 scopeados, IA on) y Games (100, todo "gaming"). Diagnóstico:
-- [EN CURSO] **Fix scorer false-positives** (elegido como próximo): el scorer usa substring crudo igual que el viejo clasificador → "dev" matchea dentro de "**Dev**astator" (+20). Aplicar word boundaries como en `rule_classifier`.
-- [ ] **Cobertura IA (batch)**: la IA solo cubre top-30 (`AI_MAX_BOOKMARKS`); el resto queda con reglas crudas. Mandar varios bookmarks por llamada para cubrir todos (barato/rápido). Es lo que realmente resuelve diferenciar ocio/trabajo en todos.
-- [ ] **Velocidad validación**: con `skip_validation=False`, validar 200 links serial con timeout 8s tardó ~10 min. Paralelizar (async/thread pool).
-- [ ] **Clasificación dominada por carpeta**: todo lo que está en `Games/` → "gaming" (hasta tutoriales de Sony Vegas). El folder es señal fuerte pero cruda; la IA lo corrige pero solo en 30.
-- [ ] **Score plano para ocio**: todo gaming = 40 = archivar sin matiz (rules-only).
+- [x] **Fix scorer false-positives** (2026-06-28, commit 605b2b1): word boundaries en el scorer. "dev" ya no matchea "Devastator" (70→50).
+- [x] **Cobertura IA (batch)** (2026-06-28): `ai_classifier.classify_bookmarks_batch` manda varios bookmarks por llamada (con "id" para alinear). El analyzer clasifica TODOS los analizados (tope `AI_MAX_BOOKMARKS` subido a 200, `AI_BATCH_SIZE`=20). Prompt: la carpeta es "pista débil, no decisiva" (ataca el punto 3). Probado: 6 bookmarks en 1 llamada, enriquecidos=6. **PENDIENTE: que el usuario lo pruebe en su carpeta real grande (Landings/Games) — la alineación multi-lote por id no se probó en vivo aún.**
+- [ ] **Lectura de páginas (2do paso del plan acordado)**: la validación es superficial (solo status). Sumar fetch del contenido real (httpx liviano: título/description/encabezados/texto; Playwright como upgrade JS) para alimentar a la IA. Decisión del usuario: empezamos por "IA-todos sin leer página" (hecho), la lectura va después. NO es MCP (su app usa OpenAI directo); es Playwright/httpx como librería.
+- [ ] **Velocidad validación**: usuario dijo "calidad > velocidad, no me importa que tarde". Paralelizar queda como mejora opcional, no prioritaria.
+- [ ] **Score plano para ocio** (rules-only): mitigado cuando IA on (ahora cubre todos).
 - [ ] **Decidir la acción final del agente** (qué hace con el resultado más allá de reportes). Opciones evaluadas: (a) solo recomendar [hoy], (b) generar export reorganizado para reimportar, (c) manipular navegador. El usuario eligió "decidir después", cuando lo vea funcionando mejor. Hoy `archivar`/`borrar_probable` son solo etiquetas advisory; no se mueve/borra nada real.
 - [ ] Commit + push de este upgrade (pendiente de pedido del usuario).
 - [ ] Probar el flujo de continuidad: `git push` desde acá y `git pull` + retomar en otra PC.

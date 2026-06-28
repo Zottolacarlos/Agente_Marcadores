@@ -24,6 +24,9 @@ Reglas anti-alucinación (importantes):
 - Si el título/URL/carpeta no alcanzan para decidir, usá category "desconocido" y confidence baja (< 0.5).
 - La "reason" debe ser breve y basarse solo en lo que se ve y en el perfil.
 - Respetá las "Reglas personales" del perfil cuando apliquen.
+- La CARPETA es solo una pista DÉBIL, no decisiva: clasificá por lo que el link
+  realmente es (título + URL). Ej: un tutorial de edición de video guardado en una
+  carpeta "Games" NO es gaming.
 
 Respondé SOLO JSON válido con este esquema:
 {
@@ -141,3 +144,59 @@ def classify_bookmark_with_ai(payload: dict) -> AIBookmarkClassification | None:
         return result
     except Exception:
         return None
+
+
+def classify_bookmarks_batch(payloads: list[dict]) -> list[AIBookmarkClassification | None]:
+    """Clasifica MUCHOS bookmarks mandando varios por llamada (batch).
+
+    Devuelve una lista alineada 1:1 con `payloads` (None donde la IA no opinó o falló).
+    Cada item lleva un "id" para alinear la respuesta aunque la IA cambie el orden o
+    devuelva de más/menos. Cualquier error en un lote deja esos items en None (fallback local).
+    """
+    results: list[AIBookmarkClassification | None] = [None] * len(payloads)
+    if not is_ai_available() or not payloads:
+        return results
+
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return results
+
+    client = OpenAI(api_key=settings.openai_api_key, timeout=settings.ai_timeout_seconds)
+    system = build_system_prompt()
+    taxonomy = load_taxonomy()
+    size = max(1, settings.ai_batch_size)
+
+    for start in range(0, len(payloads), size):
+        chunk = payloads[start : start + size]
+        items = [{"id": start + i, **p} for i, p in enumerate(chunk)]
+        user = (
+            "Clasificá CADA bookmark de esta lista. Devolvé SOLO JSON válido con la forma "
+            '{"results": [ ... ]}, un objeto por bookmark, cada uno con su "id" original '
+            "y los campos del esquema.\n" + json.dumps(items, ensure_ascii=False)
+        )
+        try:
+            response = client.chat.completions.create(
+                model=settings.openai_model,
+                temperature=0,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            )
+            data = json.loads(response.choices[0].message.content or "")
+            for obj in data.get("results", []):
+                idx = obj.get("id")
+                if not isinstance(idx, int) or not (0 <= idx < len(payloads)):
+                    continue
+                try:
+                    cls = AIBookmarkClassification(**{k: v for k, v in obj.items() if k != "id"})
+                    cls.category = enforce_taxonomy(cls.category, taxonomy)
+                    results[idx] = cls
+                except Exception:
+                    continue
+        except Exception:
+            continue  # ese lote queda en None -> fallback local
+
+    return results

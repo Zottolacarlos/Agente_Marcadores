@@ -8,6 +8,7 @@ perfil.md
 # Material de pruebas con datos reales (capturas, reportes, marcadores). NO versionar.
 pruebas de diseño/
 pruebas/
+tests/resultados/
 *.db
 data/input/*
 !data/input/.gitkeep

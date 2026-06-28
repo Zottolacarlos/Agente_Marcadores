@@ -45,6 +45,25 @@ def test_analyze_without_ai_has_no_banner():
     assert "IA activada" not in r.text
 
 
+def test_more_than_ten_results_show_toggle():
+    links = "".join(
+        f'<DT><A HREF="https://example.com/{i}">Link {i}</A>' for i in range(12)
+    )
+    html = (
+        b"<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p><DT><H3>Pendientes</H3><DL><p>"
+        + links.encode()
+        + b"</DL></DL>"
+    )
+    r = client.post(
+        "/analyze",
+        data={"target_folder": "Pendientes", "skip_validation": "true"},
+        files={"file": ("b.html", html, "text/html")},
+    )
+    assert r.status_code == 200
+    assert "Ver más" in r.text
+    assert "extra-row" in r.text
+
+
 def test_analyze_renders_schedule_section():
     r = client.post(
         "/analyze",

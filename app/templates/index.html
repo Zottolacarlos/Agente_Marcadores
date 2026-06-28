@@ -30,9 +30,9 @@
     </div>
 
     <div class="card" style="box-shadow:none;">
-      <h3>2 · Carpeta objetivo</h3>
-      <input id="target_folder" type="text" name="target_folder" value="{{ defaults.target_folder if defaults else 'Pendientes' }}" placeholder="Ej: Barra de favoritos/Metalico">
-      <p class="small muted">La búsqueda es flexible: alcanza con una parte del path, por ejemplo <strong>Metalico</strong>. Dejalo vacío para analizar todo.</p>
+      <h3>2 · Carpeta(s) objetivo</h3>
+      <textarea id="target_folder" name="target_folder" rows="2" placeholder="Ej: Barra de favoritos/Metalico">{{ defaults.target_folder if defaults else 'Pendientes' }}</textarea>
+      <p class="small muted">Podés elegir <strong>varias</strong> carpetas (una por línea): tocá varias en el árbol o escribilas. La búsqueda es flexible (alcanza una parte del path). Vacío = analizar todo.</p>
 
       <div class="actions" style="margin-top:10px;">
         <button type="button" id="detect-folders" class="button-ghost">Detectar mis carpetas</button>
@@ -193,9 +193,17 @@
     }
 
     name.addEventListener('click', function () {
-      target.value = node.path;
-      document.querySelectorAll('.tree-name.active').forEach(function (n) { n.classList.remove('active'); });
-      name.classList.add('active');
+      // Multi-selección: cada clic agrega/saca la carpeta (una por línea en el textarea).
+      var lines = target.value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+      var idx = lines.indexOf(node.path);
+      if (idx >= 0) {
+        lines.splice(idx, 1);
+        name.classList.remove('active');
+      } else {
+        lines.push(node.path);
+        name.classList.add('active');
+      }
+      target.value = lines.join('\n');
     });
 
     return li;

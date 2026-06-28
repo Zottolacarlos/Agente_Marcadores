@@ -32,24 +32,32 @@ def run_analysis(
         ">> run_analysis: %d bookmarks de entrada | carpeta=%r | limit=%s | skip_validation=%s | use_ai=%s",
         len(bookmarks), target_folder, limit, skip_validation, use_ai,
     )
+    # `target_folder` puede traer VARIAS carpetas (una por línea) para multi-selección.
     # Se normalizan las barras sobrantes en ambos lados: elegir "Games/" (con barra
     # final) no debe excluir los marcadores que están directamente en "Games".
-    folder_filter = (target_folder or "").strip().strip("/").lower()
+    folder_filters = [
+        f.strip().strip("/").lower()
+        for f in (target_folder or "").splitlines()
+        if f.strip().strip("/")
+    ]
 
-    if folder_filter:
-        scoped = [b for b in bookmarks if folder_filter in (b.folder_path or "").strip("/").lower()]
+    if folder_filters:
+        scoped = [
+            b for b in bookmarks
+            if any(ff in (b.folder_path or "").strip("/").lower() for ff in folder_filters)
+        ]
     else:
         scoped = bookmarks
 
-    logger.info("Filtro '%s' -> %d/%d bookmarks en alcance", folder_filter, len(scoped), len(bookmarks))
+    logger.info("Filtros %s -> %d/%d bookmarks en alcance", folder_filters or "(ninguno)", len(scoped), len(bookmarks))
     if scoped:
         folder_counts = Counter(b.folder_path for b in scoped)
         muestra = " | ".join(f"{path} ({n})" for path, n in folder_counts.most_common(8))
         logger.info("Carpetas en alcance (top): %s", muestra)
 
-    if folder_filter and not scoped:
-        warning = f"No se encontró carpeta '{target_folder}'. Se analizaron todos los bookmarks."
-        logger.warning("Carpeta '%s' no matcheo nada -> se analiza TODO (%d)", target_folder, len(bookmarks))
+    if folder_filters and not scoped:
+        warning = f"No se encontró ninguna de las carpetas {folder_filters}. Se analizaron todos los bookmarks."
+        logger.warning("Filtros %s no matchearon nada -> se analiza TODO (%d)", folder_filters, len(bookmarks))
         scoped = bookmarks
 
     if limit is not None:
@@ -151,7 +159,7 @@ def run_analysis(
         broken=sum(1 for x in analyzed_sorted if x.status == "BROKEN"),
         duplicates=sum(1 for x in analyzed_sorted if x.duplicate),
         review_or_delete=sum(1 for x in analyzed_sorted if x.recommended_action in {"revisar_o_borrar", "borrar_probable"}),
-        top_recommended=analyzed_sorted[:10],
+        top_recommended=analyzed_sorted[:25],
         schedule=schedule,
         reports=report_files,
         warning=warning,

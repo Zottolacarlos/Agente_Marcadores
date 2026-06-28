@@ -67,7 +67,7 @@
       </thead>
       <tbody>
         {% for item in summary.top_recommended %}
-          <tr>
+          <tr {% if loop.index > 10 %}class="extra-row" hidden{% endif %}>
             <td>
               <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a><br>
               <span class="small muted">{{ item.folder_path }}</span>
@@ -92,10 +92,31 @@
         {% endfor %}
       </tbody>
     </table>
+    {% if summary.top_recommended|length > 10 %}
+      <div class="actions">
+        <button type="button" id="toggle-extra" class="button-ghost"
+                data-more="Ver más ({{ summary.top_recommended|length - 10 }})" data-less="Ver menos">
+          Ver más ({{ summary.top_recommended|length - 10 }})
+        </button>
+      </div>
+    {% endif %}
   {% else %}
     <p class="muted">No hay resultados para mostrar.</p>
   {% endif %}
 </section>
+
+<script>
+(function () {
+  var btn = document.getElementById('toggle-extra');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var rows = document.querySelectorAll('tr.extra-row');
+    var hidden = rows.length && rows[0].hasAttribute('hidden');
+    rows.forEach(function (r) { if (hidden) { r.removeAttribute('hidden'); } else { r.setAttribute('hidden', ''); } });
+    btn.textContent = hidden ? btn.dataset.less : btn.dataset.more;
+  });
+})();
+</script>
 
 <section class="card">
   <h2>Cronograma sugerido (7 días)</h2>

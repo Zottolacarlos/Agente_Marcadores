@@ -46,6 +46,11 @@ El usuario corrió Landings (797 scopeados, IA on) y Games (100, todo "gaming").
 - [ ] **Lectura de páginas (2do paso del plan acordado)**: la validación es superficial (solo status). Sumar fetch del contenido real (httpx liviano: título/description/encabezados/texto; Playwright como upgrade JS) para alimentar a la IA. Decisión del usuario: empezamos por "IA-todos sin leer página" (hecho), la lectura va después. NO es MCP (su app usa OpenAI directo); es Playwright/httpx como librería.
 - [ ] **Velocidad validación**: usuario dijo "calidad > velocidad, no me importa que tarde". Paralelizar queda como mejora opcional, no prioritaria.
 - [ ] **Score plano para ocio** (rules-only): mitigado cuando IA on (ahora cubre todos).
+
+### Features de UX pedidas (2026-06-28)
+- [x] **Mostrar más (top 25)**: el resumen muestra hasta 25 (antes 10); las filas 11-25 ocultas con botón "Ver más". `top_recommended[:25]` + toggle JS en `summary.html`.
+- [x] **Multi-selección de carpetas** (2026-06-28): `run_analysis` parsea `target_folder` por líneas → varios filtros (matchea cualquiera). UI: el campo es textarea (una carpeta por línea) y el árbol hace multi-toggle (clic agrega/saca). +tests `test_analyzer_folder`. Probado e2e: "Games\\nIMSA" → 2/2.
+- [ ] **Análisis acumulativo / continuable + revisión humana** (GRANDE, necesita diseño previo): hoy `save_analysis` hace `DELETE FROM` (sin historial). Para "dividir hoy y seguir mañana" hace falta modelo de sesiones persistidas, dedup por URL, retomar/sumar, y override humano de acción/categoría. Es el roadmap "persistencia histórica" + "export reorganizado".
 - [ ] **Decidir la acción final del agente** (qué hace con el resultado más allá de reportes). Opciones evaluadas: (a) solo recomendar [hoy], (b) generar export reorganizado para reimportar, (c) manipular navegador. El usuario eligió "decidir después", cuando lo vea funcionando mejor. Hoy `archivar`/`borrar_probable` son solo etiquetas advisory; no se mueve/borra nada real.
 - [ ] Commit + push de este upgrade (pendiente de pedido del usuario).
 - [ ] Probar el flujo de continuidad: `git push` desde acá y `git pull` + retomar en otra PC.

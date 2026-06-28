@@ -1,0 +1,2 @@
+title,url,normalized_url,folder_path,category,status,score,effective_score,recommended_action,duplicate,reason,ai_category,ai_intent,ai_action,ai_priority,ai_confidence,ai_reason
+FastAPI,https://fastapi.tiangolo.com,https://fastapi.tiangolo.com,Pendientes,python,NOT_VALIDATED,75,75,ver_esta_semana,False,"base 30, categoría clave (+30), estaba en Pendientes (+15), validación omitida (0)",,,,,,

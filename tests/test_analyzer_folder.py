@@ -19,3 +19,14 @@ def test_trailing_slash_still_includes_direct_folder_items():
 def test_folder_filter_includes_whole_subtree():
     summary = analyzer.run_analysis(_bookmarks(), "Games", skip_validation=True)
     assert summary.total == 2
+
+
+def test_multiple_folders_selected():
+    # Multi-selección: varias carpetas (una por línea) → matchea cualquiera.
+    summary = analyzer.run_analysis(_bookmarks(), "Games\nIMSA", skip_validation=True)
+    assert summary.total == 3  # 2 de Games + 1 de IMSA
+
+
+def test_blank_lines_in_selection_are_ignored():
+    summary = analyzer.run_analysis(_bookmarks(), "\n  \nIMSA\n", skip_validation=True)
+    assert summary.total == 1

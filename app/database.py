@@ -28,5 +28,17 @@ def init_db() -> None:
         )
         """
     )
+    # Estado persistente del trabajo de curaduría: guarda la ÚLTIMA corrida (no un
+    # historial día-a-día) para mostrar un dashboard al reabrir la app.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS analysis_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            updated_at TEXT,
+            params TEXT,
+            summary TEXT
+        )
+        """
+    )
     conn.commit()
     conn.close()

@@ -1,5 +1,6 @@
 import logging
 from collections import Counter
+from datetime import datetime
 
 from app.config import settings
 from app.models.analysis import AnalysisSummary
@@ -151,9 +152,8 @@ def run_analysis(
     schedule = build_7_day_schedule(analyzed_sorted)
     report_files = write_reports(settings.reports_dir, analyzed_sorted, schedule)
     logger.info("OK Analisis listo: %d analizados | reportes en %s", len(analyzed_sorted), settings.reports_dir)
-    SQLiteRepository().save_analysis(analyzed_sorted)
 
-    return AnalysisSummary(
+    summary = AnalysisSummary(
         total=len(analyzed_sorted),
         ok=sum(1 for x in analyzed_sorted if x.status == "OK"),
         broken=sum(1 for x in analyzed_sorted if x.status == "BROKEN"),
@@ -167,3 +167,16 @@ def run_analysis(
         ai_enriched=ai_enriched,
         ai_low_confidence=ai_low_confidence,
     )
+
+    repo = SQLiteRepository()
+    repo.save_analysis(analyzed_sorted)
+    # Persistir el estado para el dashboard (última corrida, no historial).
+    params = {
+        "target_folder": target_folder,
+        "limit": limit,
+        "skip_validation": skip_validation,
+        "use_ai": use_ai,
+    }
+    repo.save_state(summary, params, datetime.now().isoformat(timespec="seconds"))
+
+    return summary

@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>Tu curaduría</h2>
+  <p class="muted">
+    Última corrida: <strong>{{ updated_at|replace('T', ' ') }}</strong>
+    {% if params.target_folder %} · Carpeta(s): <strong>{{ params.target_folder|replace('\n', ', ') }}</strong>{% endif %}
+    {% if params.use_ai %} · <span class="pill pill-ai">IA</span>{% endif %}
+  </p>
+
+  <div class="grid grid-4">
+    <div class="metric"><strong>{{ summary.total }}</strong><span>Analizados</span></div>
+    <div class="metric"><strong>{{ summary.ok }}</strong><span>OK</span></div>
+    <div class="metric"><strong>{{ summary.broken }}</strong><span>Rotos</span></div>
+    <div class="metric"><strong>{{ summary.review_or_delete }}</strong><span>A revisar/borrar</span></div>
+  </div>
+
+  <div class="actions">
+    <a class="button" href="/nuevo">Nuevo análisis</a>
+    <a class="button button-ghost" href="/informe">Ver informe completo</a>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Plan de hoy</h2>
+  <p class="small muted">Lo más prioritario para leer según la última corrida{% if params.use_ai %} (con tu perfil){% endif %}.</p>
+  {% set today = summary.schedule.get('Día 1') if summary.schedule else [] %}
+  {% if today %}
+    <ul>
+      {% for item in today %}
+        <li style="margin-bottom:8px">
+          <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a>
+          <span class="pill" style="font-size:11px">{{ item.category }}</span>
+          <span class="small muted">· prioridad {{ item.effective_score }}</span>
+          {% if item.ai %}<br><span class="small muted">🤖 {{ item.ai.reason }}</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">No hay links agendados para hoy. Probá una <a href="/nuevo">nueva corrida</a>.</p>
+  {% endif %}
+</section>
+
+{% if summary.top_recommended %}
+<section class="card">
+  <h2>Top recomendados</h2>
+  <table>
+    <thead><tr><th>Título</th><th>Categoría</th><th>Prioridad</th><th>Acción</th></tr></thead>
+    <tbody>
+      {% for item in summary.top_recommended[:10] %}
+        <tr>
+          <td>
+            <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a><br>
+            <span class="small muted">{{ item.folder_path }}</span>
+          </td>
+          <td><span class="pill">{{ item.ai.category if item.ai else item.category }}</span></td>
+          <td>{{ item.effective_score }}</td>
+          <td>{{ item.recommended_action }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="actions"><a class="button button-ghost" href="/informe">Ver informe completo</a></div>
+</section>
+{% endif %}
+{% endblock %}

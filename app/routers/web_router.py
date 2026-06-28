@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.models.bookmark import Bookmark
+from app.repositories.sqlite_repository import SQLiteRepository
 from app.services.ai_classifier import is_ai_available
 from app.services.analyzer import run_analysis
 from app.services.chromium_bookmark_reader import read_chromium_bookmarks
@@ -34,20 +35,63 @@ def _parse_limit(raw_limit: str | None) -> tuple[int | None, str | None]:
     return limit, None
 
 
+def _form_context(request: Request, **extra) -> dict:
+    ctx = {
+        "request": request,
+        "ai_available": is_ai_available(),
+        "defaults": {
+            "target_folder": "Pendientes",
+            "limit": "",
+            "skip_validation": True,
+            "use_ai": False,
+        },
+    }
+    ctx.update(extra)
+    return ctx
+
+
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request):
+    # Si hay una corrida previa persistida, mostramos el dashboard para retomar.
+    state = SQLiteRepository().load_state()
+    if state is None:
+        return templates.TemplateResponse(request, "index.html", _form_context(request))
     return templates.TemplateResponse(
         request,
-        "index.html",
+        "dashboard.html",
         {
             "request": request,
-            "ai_available": is_ai_available(),
-            "defaults": {
-                "target_folder": "Pendientes",
-                "limit": "",
-                "skip_validation": True,
-                "use_ai": False,
-            },
+            "state": state,
+            "summary": state["summary"],
+            "params": state["params"],
+            "updated_at": state["updated_at"],
+        },
+    )
+
+
+@router.get("/nuevo", response_class=HTMLResponse)
+def nuevo(request: Request):
+    return templates.TemplateResponse(request, "index.html", _form_context(request))
+
+
+@router.get("/informe", response_class=HTMLResponse)
+def informe(request: Request):
+    """Re-muestra el informe completo de la última corrida persistida."""
+    state = SQLiteRepository().load_state()
+    if state is None:
+        return templates.TemplateResponse(request, "index.html", _form_context(request))
+    params = state["params"]
+    return templates.TemplateResponse(
+        request,
+        "summary.html",
+        {
+            "request": request,
+            "summary": state["summary"],
+            "target_folder": params.get("target_folder"),
+            "limit": params.get("limit"),
+            "skip_validation": params.get("skip_validation"),
+            "use_ai": params.get("use_ai"),
+            "from_dashboard": True,
         },
     )
 

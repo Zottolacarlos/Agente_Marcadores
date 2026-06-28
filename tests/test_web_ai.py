@@ -12,10 +12,23 @@ SAMPLE = (
 )
 
 
-def test_home_shows_ai_checkbox():
-    r = client.get("/")
+def test_form_shows_ai_checkbox():
+    r = client.get("/nuevo")
     assert r.status_code == 200
     assert 'name="use_ai"' in r.text
+
+
+def test_dashboard_after_analysis():
+    # Tras analizar, queda estado persistido y "/" muestra el dashboard.
+    client.post(
+        "/analyze",
+        data={"target_folder": "Pendientes", "skip_validation": "true"},
+        files={"file": ("b.html", SAMPLE, "text/html")},
+    )
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "Tu curaduría" in r.text
+    assert "Plan de hoy" in r.text
 
 
 def test_analyze_with_ai_renders_banner(monkeypatch):

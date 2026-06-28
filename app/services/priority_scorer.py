@@ -1,7 +1,21 @@
 from __future__ import annotations
 
+import re
+
 KEY_CATEGORIES = {"trabajo", "ia", "python", "aws", "backend", "devops", "database", "git", "jobs"}
 LEISURE_CATEGORIES = {"gaming", "comics", "entretenimiento", "deportes"}
+
+# Patrones con límite de palabra (\b…\b) para evitar falsos positivos por substring,
+# ej: "dev" NO debe matchear dentro de "Devastator". Los stems largos seguros usan \w*
+# (arquitect\w* → arquitectura/arquitecto), los cortos van como palabra entera (dev, api).
+_DEV_PAT = re.compile(
+    r"\b(?:backend|back-end|api|rest|server|service|dev|developer|"
+    r"arquitect\w*|architectur\w*|microservic\w*|desarroll\w*)\b",
+    re.IGNORECASE,
+)
+_LEARN_PAT = re.compile(r"\b(?:curso|cursos|tutorial|tutoriales|guide|gu[ií]a|learn|aprend\w*)\b", re.IGNORECASE)
+_NEWS_PAT = re.compile(r"\b(?:news|noticia|noticias|breaking)\b", re.IGNORECASE)
+_OLD_YEAR_PAT = re.compile(r"\b(?:2018|2019|2020|2021)\b")
 
 
 def action_from_score(score: int, status: str, duplicate: bool) -> str:
@@ -38,10 +52,10 @@ def score_bookmark(category: str, status: str, folder: str, duplicate: bool, tit
     elif category in LEISURE_CATEGORIES:
         add(10, "ocio/interés personal")
 
-    if any(k in text for k in ["backend", "arquitect", "architecture", "api", "microservice", "microservicio", "dev"]):
+    if _DEV_PAT.search(text):
         add(20, "relevante a desarrollo/backend")
 
-    if any(k in text for k in ["curso", "tutorial", "guide", "guía", "learn", "aprender"]):
+    if _LEARN_PAT.search(text):
         add(10, "contenido de aprendizaje")
 
     if "pendientes" in folder.lower():
@@ -61,9 +75,9 @@ def score_bookmark(category: str, status: str, folder: str, duplicate: bool, tit
     if duplicate:
         add(-15, "duplicado")
 
-    if any(k in text for k in ["news", "noticia", "breaking"]):
+    if _NEWS_PAT.search(text):
         add(-10, "posible contenido temporal")
-    if any(year in text for year in ["2018", "2019", "2020", "2021"]):
+    if _OLD_YEAR_PAT.search(text):
         add(-10, "posible contenido viejo")
 
     score = max(0, min(100, score))

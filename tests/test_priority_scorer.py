@@ -17,3 +17,15 @@ def test_priority_skip_validation_is_not_penalized():
 def test_priority_broken_link_goes_to_review():
     _, action, _ = score_bookmark("finanzas", "BROKEN", "Metalico", False, "Binance", "https://example.com")
     assert action == "revisar_o_borrar"
+
+
+def test_dev_not_matched_inside_devastator():
+    # "dev" dentro de "Devastator" NO debe disparar el +20 de desarrollo/backend.
+    _, _, reason = score_bookmark("gaming", "OK", "Games", False, "Devastator", "https://youtube.com/watch")
+    assert "desarrollo/backend" not in reason
+
+
+def test_dev_as_whole_word_still_scores():
+    _, _, reason = score_bookmark("desconocido", "OK", "Pendientes", False, "Guía de Backend API", "https://x.com")
+    assert "desarrollo/backend" in reason
+    assert "contenido de aprendizaje" in reason  # "Guía"

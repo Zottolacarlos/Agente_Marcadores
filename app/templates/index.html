@@ -37,8 +37,8 @@
       <div class="actions" style="margin-top:10px;">
         <button type="button" id="detect-folders" class="button-ghost">Detectar mis carpetas</button>
       </div>
-      <p class="small muted" id="folder-status" style="margin-top:10px;">Elegí un origen para ver tus carpetas sugeridas.</p>
-      <div class="chips" id="folder-suggestions"></div>
+      <p class="small muted" id="folder-status" style="margin-top:10px;">Elegí un origen para ver el árbol de tus carpetas.</p>
+      <div id="folder-suggestions"></div>
     </div>
 
     <div class="card" style="box-shadow:none;">
@@ -139,35 +139,66 @@
   }
 
   function renderFolders(data) {
-    const folders = (data && data.folders) || [];
-    if (!folders.length) {
+    const tree = (data && data.tree) || [];
+    if (!tree.length) {
       statusEl.textContent = (data && data.errors && data.errors.length)
         ? data.errors.join(' · ')
         : 'No se detectaron carpetas en el origen elegido.';
       return;
     }
-    statusEl.textContent = folders.length + ' carpetas detectadas (' + data.total + ' marcadores). Tocá una para usarla.';
+    statusEl.textContent = data.total + ' marcadores detectados. Navegá el árbol (▸ para abrir) y tocá una carpeta para analizarla.';
     if (fileInput && fileInput.files.length) showFileInfo(' · ' + data.total + ' marcadores detectados');
-    folders.forEach(function (f) {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'chip chip-l' + f.level;
+    const rootUl = document.createElement('ul');
+    rootUl.className = 'tree folder-tree';
+    tree.forEach(function (node) { rootUl.appendChild(makeNode(node, 0)); });
+    box.appendChild(rootUl);
+  }
 
-      const label = document.createElement('span');
-      label.textContent = f.path;
-      const count = document.createElement('span');
-      count.className = 'chip-count';
-      count.textContent = f.count;
+  function makeNode(node, depth) {
+    const li = document.createElement('li');
+    const row = document.createElement('div');
+    row.className = 'tree-row';
+    row.style.paddingLeft = (depth * 16 + 4) + 'px';
 
-      chip.appendChild(label);
-      chip.appendChild(count);
-      chip.addEventListener('click', function () {
-        target.value = f.path;
-        document.querySelectorAll('.chip.active').forEach(function (c) { c.classList.remove('active'); });
-        chip.classList.add('active');
+    const hasChildren = node.children && node.children.length;
+    const toggle = document.createElement('span');
+    toggle.className = 'tree-toggle';
+    toggle.textContent = hasChildren ? '▸' : '·';
+
+    const name = document.createElement('button');
+    name.type = 'button';
+    name.className = 'tree-name';
+    name.textContent = node.name;
+
+    const count = document.createElement('span');
+    count.className = 'chip-count';
+    count.textContent = node.count;
+
+    row.appendChild(toggle);
+    row.appendChild(name);
+    row.appendChild(count);
+    li.appendChild(row);
+
+    if (hasChildren) {
+      const childUl = document.createElement('ul');
+      childUl.className = 'tree';
+      childUl.style.display = 'none';
+      node.children.forEach(function (c) { childUl.appendChild(makeNode(c, depth + 1)); });
+      li.appendChild(childUl);
+      toggle.addEventListener('click', function () {
+        const open = childUl.style.display !== 'none';
+        childUl.style.display = open ? 'none' : 'block';
+        toggle.textContent = open ? '▸' : '▾';
       });
-      box.appendChild(chip);
+    }
+
+    name.addEventListener('click', function () {
+      target.value = node.path;
+      document.querySelectorAll('.tree-name.active').forEach(function (n) { n.classList.remove('active'); });
+      name.classList.add('active');
     });
+
+    return li;
   }
 
   if (fileInput) fileInput.addEventListener('change', function () {

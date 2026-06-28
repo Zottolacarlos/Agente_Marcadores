@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from app.database import init_db
+from app.logging_config import setup_logging
 from app.routers.api_router import router as api_router
 from app.routers.web_router import router as web_router
 
+setup_logging()
 app = FastAPI(title="bookmark-curator-agent", version="0.1.0")
 
 

@@ -9,6 +9,7 @@ class AnalysisSummary(BaseModel):
     duplicates: int
     review_or_delete: int
     top_recommended: list[BookmarkAnalysis]
+    schedule: dict[str, list[BookmarkAnalysis]] = {}
     reports: list[str]
     warning: str | None = None
     ai_used: bool = False

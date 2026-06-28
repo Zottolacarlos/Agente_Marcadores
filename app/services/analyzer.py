@@ -1,3 +1,6 @@
+import logging
+from collections import Counter
+
 from app.config import settings
 from app.models.analysis import AnalysisSummary
 from app.models.bookmark import Bookmark, BookmarkAnalysis
@@ -11,6 +14,8 @@ from app.services.report_generator import write_reports
 from app.services.rule_classifier import classify
 from app.services.scheduler import build_7_day_schedule
 
+logger = logging.getLogger("app.analyzer")
+
 NOT_VALIDATED = "NOT_VALIDATED"
 
 
@@ -23,21 +28,36 @@ def run_analysis(
     use_ai: bool = False,
 ) -> AnalysisSummary:
     warning = None
-    folder_filter = (target_folder or "").strip().lower()
+    logger.info(
+        ">> run_analysis: %d bookmarks de entrada | carpeta=%r | limit=%s | skip_validation=%s | use_ai=%s",
+        len(bookmarks), target_folder, limit, skip_validation, use_ai,
+    )
+    # Se normalizan las barras sobrantes en ambos lados: elegir "Games/" (con barra
+    # final) no debe excluir los marcadores que están directamente en "Games".
+    folder_filter = (target_folder or "").strip().strip("/").lower()
 
     if folder_filter:
-        scoped = [b for b in bookmarks if folder_filter in (b.folder_path or "").lower()]
+        scoped = [b for b in bookmarks if folder_filter in (b.folder_path or "").strip("/").lower()]
     else:
         scoped = bookmarks
 
+    logger.info("Filtro '%s' -> %d/%d bookmarks en alcance", folder_filter, len(scoped), len(bookmarks))
+    if scoped:
+        folder_counts = Counter(b.folder_path for b in scoped)
+        muestra = " | ".join(f"{path} ({n})" for path, n in folder_counts.most_common(8))
+        logger.info("Carpetas en alcance (top): %s", muestra)
+
     if folder_filter and not scoped:
         warning = f"No se encontró carpeta '{target_folder}'. Se analizaron todos los bookmarks."
+        logger.warning("Carpeta '%s' no matcheo nada -> se analiza TODO (%d)", target_folder, len(bookmarks))
         scoped = bookmarks
 
     if limit is not None:
         if limit < 1:
             raise ValueError("limit debe ser mayor o igual a 1")
+        before = len(scoped)
         scoped = scoped[:limit]
+        logger.info("Limite aplicado: %d -> %d (se recortaron %d)", limit, len(scoped), before - len(scoped))
 
     normalized = [normalize_url(b.url) for b in scoped]
     duplicate_set = detect_duplicates(normalized)
@@ -65,6 +85,7 @@ def run_analysis(
         )
 
     analyzed_sorted = sorted(analyzed, key=lambda x: x.score, reverse=True)
+    logger.info("Categorias (local): %s", dict(Counter(x.category for x in analyzed_sorted).most_common()))
 
     # Capa IA opcional. Adjunta su criterio en item.ai y, si la confianza supera el
     # umbral, hace BLENDING: fusiona score local + prioridad IA en effective_score,
@@ -75,6 +96,8 @@ def run_analysis(
     if use_ai:
         if ai_classifier.is_ai_available():
             ai_used = True
+            n_ai = min(len(analyzed_sorted), settings.ai_max_bookmarks)
+            logger.info("IA disponible. Enriqueciendo %d bookmarks (tope AI_MAX_BOOKMARKS=%d)...", n_ai, settings.ai_max_bookmarks)
             w = settings.ai_blend_weight
             for item in analyzed_sorted[: settings.ai_max_bookmarks]:
                 result = ai_classifier.classify_bookmark_with_ai(
@@ -101,12 +124,21 @@ def run_analysis(
                 )
             # Re-ordenar por el score efectivo (ya con el criterio IA aplicado).
             analyzed_sorted.sort(key=lambda x: x.effective_score, reverse=True)
+            logger.info("IA: enriquecidos=%d |baja_confianza(<%.2f)=%d", ai_enriched, settings.ai_min_confidence, ai_low_confidence)
         else:
             ai_warning = "IA solicitada, pero no está disponible (falta OPENAI_API_KEY o el cliente). Se usó análisis local."
+            logger.warning("IA solicitada pero NO disponible (falta OPENAI_API_KEY?). Fallback a reglas locales.")
             warning = f"{warning} {ai_warning}".strip() if warning else ai_warning
+
+    # Distribución final: ayuda a ver si el análisis quedó "todo archivar" y por qué.
+    scores = [x.effective_score for x in analyzed_sorted]
+    buckets = Counter("70-100" if s >= 70 else "45-69" if s >= 45 else "25-44" if s >= 25 else "0-24" for s in scores)
+    logger.info("Acciones: %s", dict(Counter(x.recommended_action for x in analyzed_sorted)))
+    logger.info("Score efectivo por rango: %s", dict(buckets))
 
     schedule = build_7_day_schedule(analyzed_sorted)
     report_files = write_reports(settings.reports_dir, analyzed_sorted, schedule)
+    logger.info("OK Analisis listo: %d analizados | reportes en %s", len(analyzed_sorted), settings.reports_dir)
     SQLiteRepository().save_analysis(analyzed_sorted)
 
     return AnalysisSummary(
@@ -116,6 +148,7 @@ def run_analysis(
         duplicates=sum(1 for x in analyzed_sorted if x.duplicate),
         review_or_delete=sum(1 for x in analyzed_sorted if x.recommended_action in {"revisar_o_borrar", "borrar_probable"}),
         top_recommended=analyzed_sorted[:10],
+        schedule=schedule,
         reports=report_files,
         warning=warning,
         ai_used=ai_used,

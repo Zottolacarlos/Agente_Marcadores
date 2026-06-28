@@ -118,7 +118,10 @@ def write_reports(reports_dir: Path, items: list[BookmarkAnalysis], schedule: di
                 f.write(f"  - URL: {item.url}\n")
                 f.write(f"  - Carpeta: {_safe(item.folder_path)}\n")
                 f.write(f"  - Categoría: {item.category}\n")
-                f.write(f"  - Motivo: {_safe(item.reason)}\n")
+                if item.ai is not None:
+                    f.write(f"  - IA · Por qué: {item.ai.intent} — {item.ai.reason}\n")
+                else:
+                    f.write(f"  - Motivo: {_safe(item.reason)}\n")
                 f.write(f"  - Prioridad: {item.effective_score}\n")
             f.write("\n")
     files.append(chrono.name)

@@ -5,6 +5,9 @@ __pycache__/
 # Datos personales: el repo es PÚBLICO. perfil.md tiene contexto laboral real
 # (IMSA/Danone/PRODUCCION) y NO se versiona. La plantilla perfil.example.md sí.
 perfil.md
+# Material de pruebas con datos reales (capturas, reportes, marcadores). NO versionar.
+pruebas de diseño/
+pruebas/
 *.db
 data/input/*
 !data/input/.gitkeep

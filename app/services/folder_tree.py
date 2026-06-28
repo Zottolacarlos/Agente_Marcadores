@@ -40,3 +40,41 @@ def extract_folder_tree(bookmarks: list[Bookmark], max_level: int = 2) -> list[d
     # con el path como desempate estable.
     folders.sort(key=lambda f: (-f["count"], f["level"], f["path"].lower()))
     return folders
+
+
+def build_folder_tree(bookmarks: list[Bookmark]) -> list[dict]:
+    """
+    Devuelve el árbol COMPLETO de carpetas anidado para mostrarlo navegable en la UI.
+    Cada nodo: {name, path, count, children}. `count` = total de marcadores bajo esa
+    carpeta (incluyendo subcarpetas), que es justo lo que se analiza al elegirla.
+    """
+    roots: dict[str, dict] = {}
+
+    for bookmark in bookmarks:
+        segments = _clean_segments(bookmark.folder_path)
+        if not segments:
+            continue
+        children_map = roots
+        parts: list[str] = []
+        for segment in segments:
+            parts.append(segment)
+            node = children_map.get(segment)
+            if node is None:
+                node = {"name": segment, "path": "/".join(parts), "count": 0, "_children": {}}
+                children_map[segment] = node
+            node["count"] += 1
+            children_map = node["_children"]
+
+    def _to_list(children_map: dict[str, dict]) -> list[dict]:
+        nodes = sorted(children_map.values(), key=lambda n: (-n["count"], n["name"].lower()))
+        return [
+            {
+                "name": n["name"],
+                "path": n["path"],
+                "count": n["count"],
+                "children": _to_list(n["_children"]),
+            }
+            for n in nodes
+        ]
+
+    return _to_list(roots)

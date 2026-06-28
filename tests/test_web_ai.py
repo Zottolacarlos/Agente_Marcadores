@@ -46,3 +46,13 @@ def test_analyze_without_ai_has_no_banner():
     )
     assert r.status_code == 200
     assert "IA activada" not in r.text
+
+
+def test_analyze_renders_schedule_section():
+    r = client.post(
+        "/analyze",
+        data={"target_folder": "Pendientes", "skip_validation": "true"},
+        files={"file": ("b.html", SAMPLE, "text/html")},
+    )
+    assert r.status_code == 200
+    assert "Cronograma sugerido" in r.text

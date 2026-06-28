@@ -1,8 +1,10 @@
 import typer
+from app.logging_config import setup_logging
 from app.services.analyzer import run_analysis
 from app.services.chromium_bookmark_reader import read_chromium_bookmarks
 from app.services.html_bookmark_parser import parse_bookmarks_html
 
+setup_logging()
 cli = typer.Typer()
 
 

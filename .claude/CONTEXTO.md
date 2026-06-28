@@ -32,11 +32,20 @@
 
 - [x] **IA conectada a la web** (2026-06-26): checkbox "Usar IA" en `index.html` (con aviso de privacidad y disabled si no hay key), `use_ai` cableado en `web_router.py` (`/analyze` + `home` pasa `ai_available`), banner + info IA por link en `summary.html` (badge `pill-ai`, motivo, confianza, ⚠ baja conf). Tests web mockeados en `tests/test_web_ai.py`. Total **31 passed**.
 - [x] **Blending de score** (2026-06-26): `effective_score = (1-w)·local + w·IA_priority` con `w=AI_BLEND_WEIGHT` (0.6), gated por `AI_MIN_CONFIDENCE` (subido a **0.70**). Re-ordena top + cronograma y recalcula acción vía `priority_scorer.action_from_score()`. Score local intacto/visible. Propagado a reportes (md/cronograma/CSV `effective_score`) y web (columna "Prioridad" + desglose `local · IA`). Probado en vivo: LinkedIn subió, Transformers cayó 55→28→archivar. Total 32 tests.
-- [x] **Cronograma con datos IA**: ya usa `effective_score` (orden blended) — el item 7 queda cubierto por el blending.
-- [ ] **Vista árbol de carpetas** (item 8): hoy hay chips sugeridos, falta el árbol visual navegable.
-- [ ] **Probar IA real**: copiar `.env.example`→`.env`, poner `OPENAI_API_KEY` y correr `--use-ai` con la API real (hasta ahora probado solo con mocks + fallback sin key).
-- [ ] **(Opcional, evaluado) Blending de score IA**: hoy la IA es aditiva (no toca score/orden, para no meter ruido). Próximo paso posible: que la prioridad IA influya en el orden/acción.
-- [ ] **Rediseñar la visualización de niveles de carpeta** (los chips 1er/2do nivel "no se entienden"). El usuario va a mandar una captura para acertar el diseño. PENDIENTE de su imagen.
+- [x] **Cronograma con datos IA** (2026-06-26): el plan de 7 días ahora se **renderiza en la web** (`summary.html`, antes solo `.md` descargable), ordenado por `effective_score` (blended) y mostrando el "por qué" de la IA (intención + razón) por link. `AnalysisSummary.schedule` expone el cronograma. Reporte `.md` también enriquecido. +1 test web. Total 33.
+- [x] **Vista árbol de carpetas** (2026-06-27): `folder_tree.build_folder_tree` (árbol anidado completo con conteo recursivo); `/folders` devuelve `tree`; `index.html` lo renderiza navegable (▸ expandir, colapsado x defecto, clic en nombre = elige subárbol). Reemplaza los chips. +tests `test_folder_tree.py`.
+- [x] **Bugfix filtro de carpeta** (2026-06-27): `target_folder` con barra final (ej "Games/") excluía los items directos. Se normaliza con `.strip("/")` en ambos lados. +`test_analyzer_folder.py`.
+- [x] **Logging backend** (2026-06-27): `app/logging_config.py` (logger "app", ASCII, vía `LOG_LEVEL`), activado en `main.py` y `cli.py`. `analyzer` loguea filtro/alcance/carpetas/categorías/acciones/rangos de score/IA; `web_router` loguea origen y árbol. Clave para diagnosticar sin capturas.
+- [x] **`run.ps1`**: atajo para levantar la web (`.\run.ps1`).
+- [ ] **Probar IA real**: ✅ hecho — corridas reales con OpenAI OK (gasto sesión IA ~$0.008).
+
+### Hallazgos del análisis (diagnóstico con logs reales, 2026-06-28) — PRÓXIMOS FIXES
+El usuario corrió Landings (797 scopeados, IA on) y Games (100, todo "gaming"). Diagnóstico:
+- [EN CURSO] **Fix scorer false-positives** (elegido como próximo): el scorer usa substring crudo igual que el viejo clasificador → "dev" matchea dentro de "**Dev**astator" (+20). Aplicar word boundaries como en `rule_classifier`.
+- [ ] **Cobertura IA (batch)**: la IA solo cubre top-30 (`AI_MAX_BOOKMARKS`); el resto queda con reglas crudas. Mandar varios bookmarks por llamada para cubrir todos (barato/rápido). Es lo que realmente resuelve diferenciar ocio/trabajo en todos.
+- [ ] **Velocidad validación**: con `skip_validation=False`, validar 200 links serial con timeout 8s tardó ~10 min. Paralelizar (async/thread pool).
+- [ ] **Clasificación dominada por carpeta**: todo lo que está en `Games/` → "gaming" (hasta tutoriales de Sony Vegas). El folder es señal fuerte pero cruda; la IA lo corrige pero solo en 30.
+- [ ] **Score plano para ocio**: todo gaming = 40 = archivar sin matiz (rules-only).
 - [ ] **Decidir la acción final del agente** (qué hace con el resultado más allá de reportes). Opciones evaluadas: (a) solo recomendar [hoy], (b) generar export reorganizado para reimportar, (c) manipular navegador. El usuario eligió "decidir después", cuando lo vea funcionando mejor. Hoy `archivar`/`borrar_probable` son solo etiquetas advisory; no se mueve/borra nada real.
 - [ ] Commit + push de este upgrade (pendiente de pedido del usuario).
 - [ ] Probar el flujo de continuidad: `git push` desde acá y `git pull` + retomar en otra PC.

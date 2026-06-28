@@ -98,6 +98,38 @@
 </section>
 
 <section class="card">
+  <h2>Cronograma sugerido (7 días)</h2>
+  <p class="small muted">
+    Agenda de lectura ordenada por prioridad{% if summary.ai_used %} (con el criterio de tu perfil){% endif %}.
+    Incluye solo links accionables (acción "ver esta semana" o "ver luego", no rotos ni duplicados).
+  </p>
+  {% set has_plan = summary.schedule and summary.schedule.values()|map('length')|sum > 0 %}
+  {% if has_plan %}
+    <div class="grid grid-2">
+      {% for day, day_items in summary.schedule.items() %}
+        {% if day_items %}
+          <div class="metric" style="text-align:left">
+            <strong style="font-size:16px">{{ day }}</strong>
+            <ul style="margin:8px 0 0; padding-left:18px">
+              {% for item in day_items %}
+                <li style="margin-bottom:6px">
+                  <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a>
+                  <span class="pill" style="font-size:11px">{{ item.category }}</span>
+                  <span class="small muted">· prioridad {{ item.effective_score }}</span>
+                  {% if item.ai %}<br><span class="small muted">🤖 {{ item.ai.reason }}</span>{% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">No hay links accionables para agendar en esta carpeta.</p>
+  {% endif %}
+</section>
+
+<section class="card">
   <h2>Reportes generados</h2>
   <ul>
     {% for report in summary.reports %}

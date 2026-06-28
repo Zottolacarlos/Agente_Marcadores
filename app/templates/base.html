@@ -207,33 +207,55 @@
     }
     .file-info .muted { color: #9aa3b2; }
 
-    /* Sugerencias de carpetas (chips clickeables) */
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--bg-elev);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 999px;
-      padding: 6px 10px 6px 12px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .chip:hover { border-color: var(--primary); background: #1c2030; }
-    .chip.active { border-color: var(--primary); background: #20243a; }
-    .chip.chip-l2 { opacity: 0.92; padding-left: 20px; }
-    .chip .chip-count {
+    .chip-count {
       background: #2a2f3a;
       color: var(--muted);
       border-radius: 999px;
       padding: 1px 8px;
       font-size: 12px;
+      margin-left: auto;
     }
-    .chip.active .chip-count { background: var(--primary); color: white; }
+
+    /* Árbol de carpetas navegable */
+    .folder-tree {
+      max-height: 360px;
+      overflow: auto;
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 6px;
+      background: var(--bg-elev);
+    }
+    ul.tree { list-style: none; margin: 0; padding: 0; }
+    .tree-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px 3px 0;
+      border-radius: 8px;
+    }
+    .tree-row:hover { background: #1c2030; }
+    .tree-toggle {
+      width: 16px;
+      text-align: center;
+      cursor: pointer;
+      color: var(--muted);
+      user-select: none;
+      flex: 0 0 auto;
+    }
+    .tree-name {
+      background: none;
+      border: 0;
+      color: var(--text);
+      font-weight: 600;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 14px;
+      text-align: left;
+    }
+    .tree-name:hover { color: #fff; }
+    .tree-name.active { background: var(--primary); color: #fff; }
 
     @media (max-width: 800px) {
       .grid-2, .grid-4 { grid-template-columns: 1fr; }

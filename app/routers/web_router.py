@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -9,9 +11,10 @@ from app.models.bookmark import Bookmark
 from app.services.ai_classifier import is_ai_available
 from app.services.analyzer import run_analysis
 from app.services.chromium_bookmark_reader import read_chromium_bookmarks
-from app.services.folder_tree import extract_folder_tree
+from app.services.folder_tree import build_folder_tree
 from app.services.html_bookmark_parser import parse_bookmarks_html
 
+logger = logging.getLogger("app.web")
 router = APIRouter()
 templates = Jinja2Templates(directory=str(settings.base_dir / "app" / "templates"))
 
@@ -130,6 +133,10 @@ async def analyze(
             status_code=400,
         )
 
+    logger.info(
+        "POST /analyze | origen=[%s] | total cargado=%d | carpeta=%r | use_ai=%s",
+        ", ".join(selected_sources) or "—", len(bookmarks), target_folder, use_ai,
+    )
     summary = run_analysis(
         bookmarks,
         target_folder,
@@ -160,8 +167,8 @@ async def folders(
     use_edge: bool = Form(False),
     file: UploadFile | None = None,
 ):
-    """Detecta las carpetas (1er y 2do nivel) del origen elegido, para sugerirlas
-    en la UI. No valida links: es una pasada rápida sobre el árbol de marcadores."""
+    """Devuelve el árbol de carpetas del origen elegido, para navegarlo en la UI.
+    No valida links: es una pasada rápida sobre la estructura de marcadores."""
     bookmarks: list[Bookmark] = []
     errors: list[str] = []
 
@@ -183,9 +190,11 @@ async def folders(
         else:
             bookmarks.extend(edge_bookmarks)
 
+    tree = build_folder_tree(bookmarks)
+    logger.info("POST /folders | %d marcadores | %d carpetas raiz | errores=%s", len(bookmarks), len(tree), errors or "ninguno")
     return JSONResponse(
         {
-            "folders": extract_folder_tree(bookmarks),
+            "tree": tree,
             "errors": errors,
             "total": len(bookmarks),
         }

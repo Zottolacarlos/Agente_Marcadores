@@ -71,7 +71,8 @@
     </div>
 
     <div class="actions">
-      <button type="submit">Analizar bookmarks</button>
+      <button type="submit" id="analyze-btn">Analizar bookmarks</button>
+      <span id="analyze-status" class="muted small" hidden>⏳ Analizando… puede tardar (validación de links / IA). No cierres la página ni vuelvas a apretar.</span>
     </div>
   </form>
 </section>
@@ -217,6 +218,15 @@
   [chromeCb, edgeCb].forEach(function (cb) { if (cb) cb.addEventListener('change', loadFolders); });
   const btn = document.getElementById('detect-folders');
   if (btn) btn.addEventListener('click', loadFolders);
+
+  // Feedback al analizar: deshabilita el botón y avisa que arrancó (evita doble clic).
+  var analyzeForm = document.querySelector('form[action="/analyze"]');
+  if (analyzeForm) analyzeForm.addEventListener('submit', function () {
+    var b = document.getElementById('analyze-btn');
+    var st = document.getElementById('analyze-status');
+    if (b) { b.disabled = true; b.textContent = 'Analizando…'; }
+    if (st) st.hidden = false;
+  });
 })();
 </script>
 {% endblock %}

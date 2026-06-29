@@ -1,0 +1,53 @@
+<section class="card" id="chat">
+  <h2>💬 Preguntá sobre tus marcadores</h2>
+  <p class="small muted">
+    Consultá tu análisis: <em>"¿qué tengo de IA?"</em>, <em>"¿cuáles están rotos?"</em>,
+    <em>"¿qué leo esta semana?"</em>. Por ahora solo responde (lectura), todavía no modifica nada.
+  </p>
+  <div id="chat-log" class="chat-log"></div>
+  <form id="chat-form" class="chat-form">
+    <input id="chat-input" type="text" placeholder="Escribí tu consulta…" autocomplete="off">
+    <button type="submit">Enviar</button>
+  </form>
+</section>
+
+<script>
+(function () {
+  var log = document.getElementById('chat-log');
+  var form = document.getElementById('chat-form');
+  var input = document.getElementById('chat-input');
+  if (!form) return;
+  var history = [];
+
+  function add(role, text) {
+    var div = document.createElement('div');
+    div.className = 'chat-msg chat-' + role;
+    div.textContent = text;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+    return div;
+  }
+
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var q = input.value.trim();
+    if (!q) return;
+    add('user', q);
+    history.push({ role: 'user', content: q });
+    input.value = '';
+    var pending = add('assistant', '…');
+    try {
+      var res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history }),
+      });
+      var data = await res.json();
+      pending.textContent = data.reply || '(sin respuesta)';
+      history.push({ role: 'assistant', content: data.reply || '' });
+    } catch (err) {
+      pending.textContent = 'Error de conexión.';
+    }
+  });
+})();
+</script>

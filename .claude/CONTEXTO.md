@@ -20,13 +20,15 @@
 
 ## Última sesión
 
-**Fecha:** 2026-06-25 · **Dispositivo:** PC principal (`C:\Zsimia\Agente_Marcadores`)
+**Fecha:** 2026-06-29 · **Dispositivo:** notebook (se cambia a otra PC ahora) · **HEAD pusheado, working tree limpio.**
 
-- **Upgrade de UX de la web (3 cosas):**
-  1. **Tema oscuro** en toda la web (paleta reescrita en `app/templates/base.html`; el resto de templates heredan).
-  2. **Sugerencia de carpetas:** nuevo `app/services/folder_tree.py::extract_folder_tree` (carpetas 1er/2do nivel con conteo, limpia el prefijo de perfil `Default`/`Profile N`) + endpoint `POST /folders` (JSON) en `web_router.py`. El `index.html` detecta el origen y muestra *chips* clickeables que rellenan la carpeta objetivo.
-  3. Se aclaró que la subida del HTML **ya** funciona desde la web (el `data/input/` era solo para el CLI); se reordenó el form (origen → carpeta → opciones).
-- Verificado con TestClient (`GET /`, `POST /folders`) y `pytest` (12 passed). Se creó `.venv` local.
+**PRÓXIMO PASO AL RETOMAR (lo más importante):** está pendiente **diagnosticar el chat-agente** ("no funciona bien" según el usuario, sin detalle todavía). Activé logging del chat (`[INFO] app.chat:` muestra qué tool llama, args y respuesta). Al retomar: pedirle al usuario que pruebe una consulta y pase (a) qué preguntó + qué respondió, (b) las líneas `app.chat` del log. **Sospecha fuerte:** el chat consulta las filas de `bookmarks_analysis`, que guardan la **categoría de REGLAS, no la de la IA** (ni `effective_score`). Si se confirma, el fix es **persistir `ai_category` + `effective_score` en las filas** (en `save_analysis` + esquema) para que el chat use la clasificación buena. Eso además deja la base para la capa de decisiones.
+
+**Hecho esta sesión (todo commiteado):** chat read-only v1 (tool-calling), dashboard persistente (3a), IA clasifica-todos en batch, fix scorer (word boundaries), árbol de carpetas, multi-selección de carpetas, top-25 colapsable, cronograma en web, indicador "Analizando…", logging backend.
+
+**Pendientes anotados abajo:** evaluar una corrida REAL (dejar archivos en `tests/resultados/` — ya ignorada/segura); seguir el roadmap del chat-agente (decisiones → acciones con confirmación → export); purga opcional del historial (ver nota de seguridad).
+
+**Nota de seguridad:** `tests/resultados/` se filtró sin querer a GitHub (commit 582f51d) pero eran solo datos del **sample** (benigno). Ya está ignorada y fuera del HEAD. Purga de historial = opcional/pendiente. `perfil.md`, `.env`, `pruebas de diseño/` siguen protegidos.
 
 ## En qué estábamos / próximos pasos
 
@@ -54,7 +56,11 @@ El usuario corrió Landings (797 scopeados, IA on) y Games (100, todo "gaming").
   - [x] **3a — Persistencia + dashboard read-only** (2026-06-28): tabla `analysis_state` (1 fila, última corrida), `SQLiteRepository.save_state/load_state` (guarda el `AnalysisSummary` como JSON). `run_analysis` persiste estado al terminar. Rutas: `/` = dashboard si hay estado (si no, el form), `/nuevo` = form, `/informe` = re-muestra el último informe. `dashboard.html` (última corrida, métricas, Plan de hoy = Día 1 del cronograma, top 10). 44 tests.
   - [ ] **3b — Decisiones humanas persistidas**: borrar/conservar/mover-a-carpeta-existente/revisado por marcador (override sobre IA/reglas), con progreso (pendiente/revisado). Requiere columnas nuevas + UPSERT por normalized_url (acumular al sumar carpetas otro día).
   - [ ] **3c — Export reorganizado**: aplicar las decisiones a un `bookmarks.html` nuevo para reimportar (no destructivo, sin carpetas nuevas).
-  - [ ] **Chat-agente** (encima de lo anterior): órdenes en lenguaje natural ("borrá noticias viejas", "agrupá los de Python") que proponen edits al set curado; el usuario revisa y exporta. NO toca el browser vivo.
+  - **Chat-agente** (la visión nueva del usuario: 3b se absorbe acá — el agente hace las acciones conversando; se habilita DESPUÉS de un análisis, no siempre).
+    - [x] **Chat read-only v1** (2026-06-28): `chat_agent.py` con tool-calling de OpenAI (tools `buscar_marcadores`, `estadisticas` sobre las filas persistidas). Endpoint `POST /chat`. Partial `_chat.html` incluido en dashboard e informe. SOLO consulta, no modifica. Probado real: responde con datos y es honesto si no hay match. 50 tests.
+    - [ ] **Capa de decisiones** (backend): persistir por marcador borrado/mover_a/categoria_humana (UPSERT por normalized_url para acumular). Es sobre lo que actuará el agente.
+    - [ ] **Herramientas de acción + confirmación**: `marcar_borrar`, `mover_a_carpeta` (existente), `cambiar_categoria`, con preview/confirmación antes de aplicar.
+    - [ ] **Export reorganizado** (3c): aplica decisiones a un bookmarks.html nuevo. No crea carpetas nuevas. No toca el browser vivo.
 - [ ] **Decidir la acción final del agente** (qué hace con el resultado más allá de reportes). Opciones evaluadas: (a) solo recomendar [hoy], (b) generar export reorganizado para reimportar, (c) manipular navegador. El usuario eligió "decidir después", cuando lo vea funcionando mejor. Hoy `archivar`/`borrar_probable` son solo etiquetas advisory; no se mueve/borra nada real.
 - [ ] Commit + push de este upgrade (pendiente de pedido del usuario).
 - [ ] Probar el flujo de continuidad: `git push` desde acá y `git pull` + retomar en otra PC.

@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from app.config import settings
 from app.models.bookmark import Bookmark
 from app.repositories.sqlite_repository import SQLiteRepository
+from app.services import chat_agent
 from app.services.ai_classifier import is_ai_available
 from app.services.analyzer import run_analysis
 from app.services.chromium_bookmark_reader import read_chromium_bookmarks
@@ -243,6 +244,22 @@ async def folders(
             "total": len(bookmarks),
         }
     )
+
+
+@router.post("/chat")
+async def chat(request: Request):
+    """Chat read-only sobre el conjunto analizado (consulta, no modifica)."""
+    data = await request.json()
+    messages = data.get("messages", [])
+    clean = [
+        {"role": m["role"], "content": m["content"]}
+        for m in messages
+        if m.get("role") in {"user", "assistant"} and m.get("content")
+    ]
+    if not clean or clean[-1]["role"] != "user":
+        return JSONResponse({"reply": "Escribí una consulta sobre tus marcadores."})
+    logger.info("POST /chat | %d mensajes | última: %r", len(clean), clean[-1]["content"][:80])
+    return JSONResponse({"reply": chat_agent.answer(clean)})
 
 
 @router.get("/reports/{report_name}")

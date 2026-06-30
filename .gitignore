@@ -1,7 +1,28 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
 .venv/
+venv/
+env/
+ENV/
+
+# Poetry / local config
+# Keep poetry.lock committed for reproducible installs.
+poetry.toml
+
+# Environment variables / secrets
 .env
+.env.*
+!.env.example
+
 # Datos personales: el repo es PÚBLICO. perfil.md tiene contexto laboral real
 # (IMSA/Danone/PRODUCCION) y NO se versiona. La plantilla perfil.example.md sí.
 perfil.md
@@ -9,8 +30,25 @@ perfil.md
 pruebas de diseño/
 pruebas/
 tests/resultados/
+
+# Local app data
 *.db
+*.sqlite
+*.sqlite3
+
+# User bookmarks and generated reports
+# These may contain private browsing/work/personal information.
 data/input/*
-!data/input/.gitkeep
 data/reports/*
+!data/input/.gitkeep
 !data/reports/.gitkeep
+
+# Local generated artifacts
+*.patch
+*.log
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/

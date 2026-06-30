@@ -20,13 +20,18 @@
 
 ## Última sesión
 
-**Fecha:** 2026-06-29 · **Dispositivo:** notebook (se cambia a otra PC ahora) · **HEAD pusheado, working tree limpio.**
+**Fecha:** 2026-06-30 · **Dispositivo:** PC de escritorio (tenía una copia MUY vieja del repo) · **se reinicia Windows ahora.**
 
-**PRÓXIMO PASO AL RETOMAR (lo más importante):** está pendiente **diagnosticar el chat-agente** ("no funciona bien" según el usuario, sin detalle todavía). Activé logging del chat (`[INFO] app.chat:` muestra qué tool llama, args y respuesta). Al retomar: pedirle al usuario que pruebe una consulta y pase (a) qué preguntó + qué respondió, (b) las líneas `app.chat` del log. **Sospecha fuerte:** el chat consulta las filas de `bookmarks_analysis`, que guardan la **categoría de REGLAS, no la de la IA** (ni `effective_score`). Si se confirma, el fix es **persistir `ai_category` + `effective_score` en las filas** (en `save_analysis` + esquema) para que el chat use la clasificación buena. Eso además deja la base para la capa de decisiones.
+**Esta sesión fue de sincronización, no de features.** Esta PC estaba **10 commits atrás**. Se hizo:
+- `git pull` con fast-forward (bajaron los 10 commits: capa IA, dashboard, chat, árbol, tests, docs).
+- Conflictos resueltos: `.gitignore` **combinado** (exclusiones de datos personales del remoto + `.env.*`/cachés/IDEs locales); `README.md` → se tomó el **del remoto (español)** y se descartó un rewrite local en inglés.
+- `ROADMAP.md` (inglés, sin trackear) **eliminado** (la dirección vive en README "Próximos pasos" + `docs/ESTADO_ACTUAL.md`). `examples/sample_report.md` agregado. **Commit `d49e1b8`**.
+- Venv actualizado: le faltaba `openai` (era previo a la capa IA) → `pip install -r requirements.txt` (openai 2.44). `.env` creado desde la plantilla con **OPENAI_API_KEY vacío** (el usuario la pone a mano; `.env` está gitigorado).
+- Backend probado OK: `/`, `/nuevo`, `/informe` → 200. **Logging del chat CONFIRMADO funcionando** (`[INFO] app.web: POST /chat ...` en consola/stderr).
 
-**Hecho esta sesión (todo commiteado):** chat read-only v1 (tool-calling), dashboard persistente (3a), IA clasifica-todos en batch, fix scorer (word boundaries), árbol de carpetas, multi-selección de carpetas, top-25 colapsable, cronograma en web, indicador "Analizando…", logging backend.
+**PRÓXIMO PASO AL RETOMAR (lo más importante):** **diagnosticar el chat-agente.** El logging ya está confirmado; falta que el usuario ponga su `OPENAI_API_KEY` en `.env`, levante el backend y pruebe una consulta real, pasando (a) qué preguntó + qué respondió, (b) las líneas `app.chat`/`app.web` del log. **Sospecha fuerte (sin cambiar):** el chat consulta `bookmarks_analysis`, que guarda la **categoría de REGLAS, no la de la IA** (ni `effective_score`). Si se confirma, el fix es **persistir `ai_category` + `effective_score` en las filas** (`save_analysis` + esquema). Eso deja la base para la capa de decisiones.
 
-**Pendientes anotados abajo:** evaluar una corrida REAL (dejar archivos en `tests/resultados/` — ya ignorada/segura); seguir el roadmap del chat-agente (decisiones → acciones con confirmación → export); purga opcional del historial (ver nota de seguridad).
+**Pendientes inmediatos:** (1) `git push` del commit `d49e1b8` — se hizo en esta sesión (ver más abajo). (2) chat necesita la API key para testearse. Más pendientes de features anotados abajo.
 
 **Nota de seguridad:** `tests/resultados/` se filtró sin querer a GitHub (commit 582f51d) pero eran solo datos del **sample** (benigno). Ya está ignorada y fuera del HEAD. Purga de historial = opcional/pendiente. `perfil.md`, `.env`, `pruebas de diseño/` siguen protegidos.
 

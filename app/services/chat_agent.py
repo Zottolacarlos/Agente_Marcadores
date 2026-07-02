@@ -14,7 +14,17 @@ SYSTEM = """Sos un asistente que ayuda al usuario a explorar sus marcadores YA a
 Tenés herramientas para CONSULTAR el conjunto. Es SOLO LECTURA: todavía no podés borrar,
 mover ni modificar nada (si te lo piden, aclaralo y ofrecé consultarlo en su lugar).
 Respondé en español, breve y concreto. No inventes: si una consulta no devuelve datos, decilo.
-Cuando listes marcadores, mostrá el título y, si ayuda, la categoría o la acción recomendada."""
+Cuando listes marcadores, mostrá el título y, si ayuda, la categoría o la acción recomendada.
+
+CÓMO DEDUCIR EL TEMA ("¿de qué tratan?"):
+- Las CATEGORÍAS son una taxonomía fija y genérica (python, gaming, entretenimiento, desconocido…).
+  NO son el tema real. "desconocido" solo significa que las reglas no matchearon una keyword,
+  NO que el tema sea un misterio. Nunca respondas que los marcadores "tratan de temas desconocidos".
+- Para deducir el tema REAL mirá los TÍTULOS y los NOMBRES DE CARPETA: usá 'muestra_titulos' y
+  'por_carpeta' de la herramienta estadisticas, y 'title'/'carpeta' de las búsquedas. Ahí suele
+  estar el tema concreto (ej: una carpeta "Pkr / NUEVOS TUTOS POKER" indica que son sobre póker).
+- Todavía NO leés el contenido de las páginas; te basás en título, URL y carpeta. Si te falta
+  información para afirmar algo, decilo en vez de inventar."""
 
 TOOLS = [
     {
@@ -49,6 +59,16 @@ def _rows() -> list[dict]:
     return SQLiteRepository().list_bookmarks()
 
 
+def _categoria_efectiva(r: dict) -> str:
+    """Categoría que ve el usuario: la de la IA si enriqueció esa fila, si no la de reglas."""
+    return (r.get("ai_category") or r.get("category") or "desconocido")
+
+
+def _score_efectivo(r: dict):
+    """Score que manda (blended con IA); cae al local si la fila es previa a la IA."""
+    return r.get("effective_score") if r.get("effective_score") is not None else r.get("score")
+
+
 def buscar_marcadores(termino=None, categoria=None, accion=None, estado=None, limite=30) -> dict:
     term = (termino or "").lower()
     out = []
@@ -56,7 +76,11 @@ def buscar_marcadores(termino=None, categoria=None, accion=None, estado=None, li
         haystack = f"{r.get('title', '')} {r.get('url', '')} {r.get('folder_path', '')}".lower()
         if term and term not in haystack:
             continue
-        if categoria and (r.get("category") or "").lower() != categoria.lower():
+        # Se filtra por la categoría efectiva (IA cuando existe) para que coincida
+        # con lo que el usuario ve; se acepta también la de reglas por retrocompat.
+        if categoria and categoria.lower() not in {
+            _categoria_efectiva(r).lower(), (r.get("category") or "").lower()
+        }:
             continue
         if accion and (r.get("recommended_action") or "").lower() != accion.lower():
             continue
@@ -65,21 +89,27 @@ def buscar_marcadores(termino=None, categoria=None, accion=None, estado=None, li
         out.append({
             "title": r.get("title"),
             "url": r.get("url"),
-            "categoria": r.get("category"),
+            "categoria": _categoria_efectiva(r),
             "accion": r.get("recommended_action"),
-            "score": r.get("score"),
+            "score": _score_efectivo(r),
             "estado": r.get("status"),
             "carpeta": r.get("folder_path"),
+            "motivo_ia": r.get("ai_reason"),
         })
     return {"total_encontrados": len(out), "resultados": out[: (limite or 30)]}
 
 
 def estadisticas() -> dict:
     rows = _rows()
+    # 'por_carpeta' y 'muestra_titulos' le dan al modelo la señal del TEMA real
+    # (los nombres de carpeta y los títulos), que la taxonomía de categorías no aporta.
+    titulos = [r.get("title") for r in rows if r.get("title")]
     return {
         "total": len(rows),
-        "por_categoria": dict(Counter(r.get("category") for r in rows).most_common()),
+        "por_categoria": dict(Counter(_categoria_efectiva(r) for r in rows).most_common()),
+        "por_carpeta": dict(Counter(r.get("folder_path") or "(sin carpeta)" for r in rows).most_common(15)),
         "por_accion": dict(Counter(r.get("recommended_action") for r in rows).most_common()),
+        "muestra_titulos": titulos[:20],
     }
 
 

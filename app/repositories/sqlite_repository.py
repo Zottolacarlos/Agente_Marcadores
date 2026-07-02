@@ -13,8 +13,9 @@ class SQLiteRepository:
         cur.executemany(
             """
             INSERT INTO bookmarks_analysis
-            (title,url,normalized_url,folder_path,status,category,score,recommended_action,duplicate,reason)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+            (title,url,normalized_url,folder_path,status,category,score,recommended_action,duplicate,reason,
+             effective_score,ai_category,ai_reason,ai_confidence)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             [
                 (
@@ -28,6 +29,13 @@ class SQLiteRepository:
                     r.recommended_action,
                     int(r.duplicate),
                     r.reason,
+                    # Persistimos la capa IA (categoría/razón/confianza) y el score
+                    # efectivo (blended) para que el chat y el dashboard vean lo mismo
+                    # que la corrida, no solo la clasificación por reglas.
+                    r.effective_score,
+                    r.ai.category if r.ai else None,
+                    r.ai.reason if r.ai else None,
+                    r.ai.confidence if r.ai else None,
                 )
                 for r in rows
             ],
@@ -38,7 +46,14 @@ class SQLiteRepository:
     def list_bookmarks(self) -> list[dict]:
         conn = get_connection()
         cur = conn.cursor()
-        data = [dict(x) for x in cur.execute("SELECT * FROM bookmarks_analysis ORDER BY score DESC").fetchall()]
+        # Ordena por score efectivo (blended con IA cuando existe) y cae al score
+        # local si la fila es previa a la migración (effective_score NULL).
+        data = [
+            dict(x)
+            for x in cur.execute(
+                "SELECT * FROM bookmarks_analysis ORDER BY COALESCE(effective_score, score) DESC"
+            ).fetchall()
+        ]
         conn.close()
         return data
 

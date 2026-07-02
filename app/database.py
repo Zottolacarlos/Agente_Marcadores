@@ -8,6 +8,16 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _ensure_columns(cur, table: str, columns: dict[str, str]) -> None:
+    """Agrega columnas que falten a una tabla existente (migración liviana).
+    `CREATE TABLE IF NOT EXISTS` no altera tablas ya creadas, así que las DBs
+    viejas necesitan este ALTER para incorporar campos nuevos sin recrearse."""
+    existing = {row["name"] for row in cur.execute(f"PRAGMA table_info({table})")}
+    for name, col_type in columns.items():
+        if name not in existing:
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN {name} {col_type}")
+
+
 def init_db() -> None:
     conn = get_connection()
     cur = conn.cursor()
@@ -24,9 +34,25 @@ def init_db() -> None:
             score INTEGER,
             recommended_action TEXT,
             duplicate INTEGER,
-            reason TEXT
+            reason TEXT,
+            effective_score INTEGER,
+            ai_category TEXT,
+            ai_reason TEXT,
+            ai_confidence REAL
         )
         """
+    )
+    # Migración para DBs creadas antes de persistir la capa IA: el chat y el
+    # dashboard leen estos campos, así que deben existir aunque la tabla sea vieja.
+    _ensure_columns(
+        cur,
+        "bookmarks_analysis",
+        {
+            "effective_score": "INTEGER",
+            "ai_category": "TEXT",
+            "ai_reason": "TEXT",
+            "ai_confidence": "REAL",
+        },
     )
     # Estado persistente del trabajo de curaduría: guarda la ÚLTIMA corrida (no un
     # historial día-a-día) para mostrar un dashboard al reabrir la app.

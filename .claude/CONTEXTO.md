@@ -20,18 +20,17 @@
 
 ## Última sesión
 
-**Fecha:** 2026-06-30 · **Dispositivo:** PC de escritorio (tenía una copia MUY vieja del repo) · **se reinicia Windows ahora.**
+**Fecha:** 2026-07-01 · **Dispositivo:** portátil (Zsimia).
 
-**Esta sesión fue de sincronización, no de features.** Esta PC estaba **10 commits atrás**. Se hizo:
-- `git pull` con fast-forward (bajaron los 10 commits: capa IA, dashboard, chat, árbol, tests, docs).
-- Conflictos resueltos: `.gitignore` **combinado** (exclusiones de datos personales del remoto + `.env.*`/cachés/IDEs locales); `README.md` → se tomó el **del remoto (español)** y se descartó un rewrite local en inglés.
-- `ROADMAP.md` (inglés, sin trackear) **eliminado** (la dirección vive en README "Próximos pasos" + `docs/ESTADO_ACTUAL.md`). `examples/sample_report.md` agregado. **Commit `d49e1b8`**.
-- Venv actualizado: le faltaba `openai` (era previo a la capa IA) → `pip install -r requirements.txt` (openai 2.44). `.env` creado desde la plantilla con **OPENAI_API_KEY vacío** (el usuario la pone a mano; `.env` está gitigorado).
-- Backend probado OK: `/`, `/nuevo`, `/informe` → 200. **Logging del chat CONFIRMADO funcionando** (`[INFO] app.web: POST /chat ...` en consola/stderr).
+**Se arregló el chat-agente y la persistencia de la IA (diagnóstico del usuario con logs reales).** El usuario corrió carpeta `Pkr` (86 en alcance, IA on) y el chat, al preguntarle "¿de qué tratan?", respondió repitiendo la taxonomía local (`desconocido 48, entretenimiento 25…`) en vez de reconocer que **todo es póker**. Causas confirmadas y fixes aplicados:
+- **Bug 1 — el chat leía categorías de REGLAS, no de IA.** `save_analysis` solo persistía `r.category`; `BookmarkAnalysis.ai` y `effective_score` no se guardaban. **Fix:** columnas nuevas `effective_score/ai_category/ai_reason/ai_confidence` en `bookmarks_analysis` + **migración liviana** `_ensure_columns` (ALTER TABLE) en `database.py`; `save_analysis` las guarda; `list_bookmarks` ordena por `COALESCE(effective_score, score)`.
+- **Bug 2 — el chat repetía la taxonomía como si fuera "el tema".** `estadisticas` no devolvía carpetas ni títulos (la señal real del tema estaba en el nombre de carpeta "Pkr / NUEVOS TUTOS POKER"). **Fix:** `estadisticas` ahora expone `por_carpeta` + `muestra_titulos` y usa la **categoría efectiva** (IA si hay); `buscar_marcadores` devuelve categoría/score efectivos + `motivo_ia`; el `SYSTEM` instruye deducir el tema de títulos/carpetas y NO leer "desconocido" como un misterio.
+- **Cobertura IA plana:** el `.env` tenía `AI_MAX_BOOKMARKS=30` (por eso solo 30/86 recibieron IA y el resto quedó con score de reglas plano). Subido a **250** en `.env` (local). El default del código ya era 200.
+- Tests: `tests/test_sqlite_repository.py` (nuevo, persistencia IA + migración) + casos nuevos en `test_chat_agent.py`. **54 passed**, ruff limpio.
 
-**PRÓXIMO PASO AL RETOMAR (lo más importante):** **diagnosticar el chat-agente.** El logging ya está confirmado; falta que el usuario ponga su `OPENAI_API_KEY` en `.env`, levante el backend y pruebe una consulta real, pasando (a) qué preguntó + qué respondió, (b) las líneas `app.chat`/`app.web` del log. **Sospecha fuerte (sin cambiar):** el chat consulta `bookmarks_analysis`, que guarda la **categoría de REGLAS, no la de la IA** (ni `effective_score`). Si se confirma, el fix es **persistir `ai_category` + `effective_score` en las filas** (`save_analysis` + esquema). Eso deja la base para la capa de decisiones.
+**IMPORTANTE al retomar:** la DB actual tiene filas de la corrida vieja (schema pre-IA → `ai_category` NULL). Para que el chat vea la IA hay que **volver a correr el análisis** (con IA on); ahí se persiste todo. Pedirle al usuario que reproduzca la consulta "¿de qué tratan?" sobre `Pkr` y confirme que ahora dice póker.
 
-**Pendientes inmediatos:** (1) `git push` del commit `d49e1b8` — se hizo en esta sesión (ver más abajo). (2) chat necesita la API key para testearse. Más pendientes de features anotados abajo.
+**Pendiente de scoring (a revisar, lo dejó el usuario para después):** que un link de OCIO muy bueno puntúe alto. Hoy el ocio suma +10 → cae plano en 25-44 (`archivar`). Discriminar *calidad* dentro de un mismo tema (póker bueno vs. mediocre) necesita la IA (ya cubierta al subir AI_MAX_BOOKMARKS) y/o **leer la página** (ítem pendiente del roadmap). El scorer por reglas NO puede discriminar calidad sin contenido; no se tocó a mano.
 
 **Nota de seguridad:** `tests/resultados/` se filtró sin querer a GitHub (commit 582f51d) pero eran solo datos del **sample** (benigno). Ya está ignorada y fuera del HEAD. Purga de historial = opcional/pendiente. `perfil.md`, `.env`, `pruebas de diseño/` siguen protegidos.
 
